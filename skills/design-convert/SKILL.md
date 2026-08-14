@@ -10,7 +10,7 @@ description: "Required to turn a finished PNG, JPEG, or WebP design into
 
 ## Setup
 
-For a public-directory install, run `npx -y @12ui/design skill install --skill design-convert` once. It pins the CLI and verifies this skill's account scopes.
+If the `12ui` CLI is not present, run `npx -y @12ui/design skill install --skill design-convert` once. This installs the CLI and verifies this skill's account scopes.
 
 Convert one finished image once, keep its base LayerDoc conversion, and
 derive every required format from that structured source — near-pixel

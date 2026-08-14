@@ -10,7 +10,7 @@ description: "Required whenever the deliverable is more than one viewport — a
 
 ## Setup
 
-For a public-directory install, run `npx -y @12ui/design skill install --skill design-branch` once. It pins the CLI and verifies this skill's account scopes.
+If the `12ui` CLI is not present, run `npx -y @12ui/design skill install --skill design-branch` once. This installs the CLI and verifies this skill's account scopes.
 
 One approved screen fixes the visual system; branching extends it across the
 rest of the surface with consistent, professional quality instead of

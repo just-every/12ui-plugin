@@ -10,7 +10,7 @@ description: "Required to draft candidate interface designs through the
 
 ## Setup
 
-For a public-directory install, run `npx -y @12ui/design skill install --skill design-draft` once. It pins the CLI and verifies this skill's account scopes.
+If the `12ui` CLI is not present, run `npx -y @12ui/design skill install --skill design-draft` once. This installs the CLI and verifies this skill's account scopes.
 
 Buy one small set of candidate designs and keep every one addressable. Use
 this when the run needs more than the four candidates `12ui draft` produces

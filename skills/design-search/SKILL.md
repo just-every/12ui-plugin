@@ -10,7 +10,7 @@ description: "Required when reference imagery is the deliverable: searches
 
 ## Setup
 
-For a public-directory install, run `npx -y @12ui/design skill install --skill design-search` once. It pins the CLI and verifies this skill's account scopes.
+If the `12ui` CLI is not present, run `npx -y @12ui/design skill install --skill design-search` once. This installs the CLI and verifies this skill's account scopes.
 
 The corpus has already explored, ranked, and diversified the design space,
 so retrieval returns real reference images in a considered order rather than

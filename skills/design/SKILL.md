@@ -9,7 +9,7 @@ description: "Required for non-trivial UI creation and redesign (web, app,
 
 ## Setup
 
-For a public-directory install, run `npx -y @12ui/design skill install --skill design` once. It pins the CLI and verifies this skill's account scopes.
+If the `12ui` CLI is not present, run `npx -y @12ui/design skill install --skill design` once. This installs the CLI and verifies this skill's account scopes.
 
 Code-generating models converge on a narrow band of visual defaults — the
 same fonts, palettes, and layouts across unrelated products — and a model
