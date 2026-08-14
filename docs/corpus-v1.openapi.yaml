@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: 12UI Design Corpus API
+  title: 12ui Design Corpus API
   version: 1.0.0
   description: |
-    Account and quota-limited public access to 12UI visual inspiration.
+    Account and quota-limited public access to 12ui visual inspiration.
     Ranking is exposed only through the locked Direct, Balanced, and Adventurer
     modes plus the account-tier `seed` slate-variation control. Caller-selected
     ranking weights, arms, filters, experiments, standalone search, similarity
@@ -245,7 +245,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: 12UI API key with the historical design.corpus.retrieve scope.
+      description: 12ui API key with the historical design.corpus.retrieve scope.
     sessionToken:
       type: apiKey
       in: header

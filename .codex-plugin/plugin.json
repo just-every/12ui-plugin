@@ -1,7 +1,7 @@
 {
   "name": "12ui-design",
-  "version": "0.2.21",
-  "description": "Create distinctive interfaces with 12UI design skills and hosted design APIs.",
+  "version": "0.2.22",
+  "description": "Create distinctive interfaces with 12ui design skills and hosted design APIs.",
   "author": {
     "name": "Just Every",
     "email": "support@12ui.com",
@@ -20,7 +20,7 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "12UI Design",
+    "displayName": "12ui Design",
     "shortDescription": "Create and convert distinctive interface designs",
     "longDescription": "Search real design references, draft visual directions, expand an approved design into complete pages, and convert finished images into production-ready output.",
     "developerName": "Just Every",

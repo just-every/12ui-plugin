@@ -1,8 +1,8 @@
 {
   "name": "12ui-plugin",
-  "version": "0.2.21",
+  "version": "0.2.22",
   "private": true,
-  "description": "Public 12UI design skills, Codex plugin, and API contracts",
+  "description": "Public 12ui design skills, Codex plugin, and API contracts",
   "license": "MIT",
   "repository": "https://github.com/just-every/12ui-plugin",
   "scripts": {

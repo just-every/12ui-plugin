@@ -25,6 +25,11 @@ const ROOT_FILES = [
 ];
 
 const sorted = (values) => [...values].sort();
+const uppercaseBrand = ['12', 'UI'].join('');
+const protocolNames = [
+  `X-${uppercaseBrand}-Public-Preview`,
+  `X-${uppercaseBrand}-Public-Visitor`,
+];
 
 export async function verifyPublicPlugin(rootDirectory) {
   const root = path.resolve(rootDirectory);
@@ -41,6 +46,7 @@ export async function verifyPublicPlugin(rootDirectory) {
   assert.equal(plugin.repository, 'https://github.com/just-every/12ui-plugin');
   assert.equal(plugin.skills, './skills/');
   assert.equal(plugin.interface.developerName, 'Just Every');
+  assert.equal(plugin.interface.displayName, '12ui Design');
   assert.ok(Array.isArray(plugin.interface.defaultPrompt));
   assert.ok(plugin.interface.defaultPrompt.length > 0 && plugin.interface.defaultPrompt.length <= 3);
 
@@ -74,6 +80,15 @@ export async function verifyPublicPlugin(rootDirectory) {
       source,
       /github\.com\/just-every\/12ui(?!-plugin)(?:[/?#]|$)/u,
       `private repository link in ${file}`,
+    );
+    const branding = protocolNames.reduce(
+      (value, protocolName) => value.replaceAll(protocolName, ''),
+      source,
+    );
+    assert.equal(
+      branding.includes(uppercaseBrand),
+      false,
+      `uppercase 12ui branding in ${file}`,
     );
   }
   return { fileCount: files.length, version: plugin.version };
