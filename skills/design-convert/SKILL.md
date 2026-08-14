@@ -21,13 +21,8 @@ fidelity, faster and truer than recreating the design by hand.
     12ui convert <source-image> --export html
 
 Converts the image to a LayerDoc and exports responsive HTML alongside it in
-one blocking command (~5 minutes, progress streamed to stderr; ~4 minutes
-without `--export html`). `--model fast|standard|pro` and
-`--width <intended-css-px>` steer the conversion; `--out` and `--export-out`
-place the artifacts. The result JSON carries the conversion under `id` and
-the export under `export.id`. If the export half fails, the LayerDoc is
-still written — retry only the export with
-`12ui export <id> --output html`.
+one blocking command, which is faster than converting and then exporting.
+The result carries the conversion under `id` and the export under `export.id`.
 
 ## 2. Export more formats
 
@@ -35,11 +30,11 @@ still written — retry only the export with
       --out-dir <dir> --idempotency-key <stable-key>
 
 Derives further formats from the finished conversion without repeating
-extraction; independent exports run in parallel, and every format except
-`html` takes seconds to about a minute. Outputs: `html`, `html_fixed`,
-`svg`, `png`, `jpg`, `webp`, `pdf`, `psd`, `pptx`, `sketch`, `web_project`,
-`app_project`. Reusing the same key replays a finished export instead of
-buying it again. Project outputs take a profile matching the target project:
+extraction, and independent exports run in parallel. Outputs: `html`,
+`html_fixed`, `svg`, `png`, `jpg`, `webp`, `pdf`, `psd`, `pptx`, `sketch`,
+`web_project`, `app_project`. Reusing the same key replays a finished export
+instead of buying it again. Project outputs take a profile matching the
+target project:
 
     --web-profile '{"version":1,"framework":"react","styling":"tailwind","language":"typescript","packaging":"page"}'
     --app-profile '{"version":1,"framework":"expo","styling":"native","language":"typescript","packaging":"screen"}'
@@ -59,9 +54,9 @@ relative to the manifest; independent routes are separate page entries:
         { "id": "a", "image": "screens/a.png" },
         { "id": "b", "image": "screens/b.png" } ] } ] }
 
-Runs ~5-8 minutes, writing `<out-dir>/<page-id>.html` per page plus
-`package.result.json`. A viewport may carry `"sourceConversionId": "<id>"`
-to reuse an already succeeded conversion of the same bytes for free.
+Writes `<out-dir>/<page-id>.html` per page plus `package.result.json`. A
+viewport may carry `"sourceConversionId": "<id>"` to reuse an already
+succeeded conversion of the same bytes for free.
 
 ## 4. Integrate
 

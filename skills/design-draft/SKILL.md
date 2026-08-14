@@ -12,49 +12,30 @@ description: "Required to draft candidate interface designs through the
 
 For a public-directory install, run `npx -y @12ui/design skill install --skill design-draft` once. It pins the CLI and verifies this skill's account scopes.
 
-Buy one small set of candidate designs and keep every one addressable. This
-uses the hosted create API through credential-aware `12ui create` commands —
-not the local `12ui draft` command, which runs a four-candidate version of the
-same flow. Use it for more slots, per-slot references, or tighter direction
-control.
+Buy one small set of candidate designs and keep every one addressable. Use
+this when the run needs more than the four candidates `12ui draft` produces
+in one step, a corpus reference or direction per slot, or tighter control
+over what each slot explores.
 
-## 1. Claim the run
-
-    12ui create claim \
-      --concept "<product, audience, surface, goal, personality>" \
-      --aspect landscape \
-      --candidates '[
-        {"slot":"a","direction":"<short direction>"},
-        {"slot":"b","direction":"<short direction>",
-         "referenceId":"gen-<corpus-id>"}
-      ]'
-
-Use `--candidates @candidates.json` for a long list. The concept is at most 600
-characters. One run holds 1–96 candidates in slots `a`–`cr`, with one aspect:
-`landscape` (1536x1024), `portrait` (1024x1536), or `square` (1024x1024).
-Each candidate has a meaningfully different direction and at most one corpus
-`referenceId`. Alternatively, add `--reference-image <png|jpeg|webp>` and set
-`"useReferenceImage":true` on the slots it should guide. `--mode
-preserve-structure` keeps that image's layout; the default is `inspiration`.
-
-The command derives a stable idempotency key from the request, claims the run,
-and prints its `id`. Claiming buys nothing.
-
-## 2. Dispatch every slot
-
+    12ui create claim --concept "<product, audience, surface, goal, personality>" \
+      --candidates '[{"slot":"a","direction":"<short direction>"},
+                     {"slot":"b","direction":"<short direction>",
+                      "referenceId":"gen-<corpus-id>"}]'
     12ui create dispatch <run-id>
-
-Dispatches all unsettled slots concurrently and blocks until they return (up
-to about 2.5 minutes each). Add `--slot a,b` to select slots. A failed
-candidate is a settled, paid outcome. If the command is interrupted, generation
-continues; do not claim another run.
-
-## 3. Follow and download
-
-    12ui create status <run-id>
     12ui create download <run-id> --out-dir <directory>
 
-Status reads durable run state. Download writes every succeeded PNG; add
-`--slot a,b` to select slots. Runs expire seven days after the claim. A winner
-can seed `12ui branch execute --winner-run <run-id> --winner-slot <slot>`
-without re-uploading its bytes.
+Each command prints the next; `12ui next <run-id>` reports what is still
+generating, and `--wait` blocks until every slot settles.
+
+The judgement is the brief and the slots. One aspect covers the whole run —
+`landscape` (1536x1024), `portrait` (1024x1536), `square` (1024x1024) — and
+directions must be meaningfully different from each other, since four
+paraphrases of one idea buy four of the same design. A slot takes at most one
+reference: `referenceId` names a corpus reference, or `"useReferenceImage":
+true` conditions it on the run-level `--reference-image`, whose
+`preserve-structure` mode keeps that image's layout. A run holds 1-96
+candidates in slots `a`-`cr` and expires seven days after the claim.
+
+A candidate that comes back `failed` is a settled, paid outcome rather than a
+transient error. A winning candidate seeds a branch run as
+`--winner-run <run-id> --winner-slot <slot>` without re-uploading its bytes.

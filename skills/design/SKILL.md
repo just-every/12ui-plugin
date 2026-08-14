@@ -24,13 +24,15 @@ quicker.
 
 ## 1. Explore — four directions
 
+Already holding the finished design? Build it, do not redraw it: see
+`design-convert`. Only to redraw an existing interface:
+`12ui draft --redesign-source <png> --mode exploratory|reskin`.
+
     12ui draft --query "<product, audience, surface, goal, personality>"
 
 Creates the run directory and prints its path — pass it to every later
 command. Searches the corpus for four diverse references and generates one
 one-viewport candidate steered by each, returning immediately.
-`12ui draft status <run-dir>` reports progress (typically ~90s).
-Redesigns: `--redesign-source <png> --mode exploratory|reskin`.
 
 ## 2. Select
 
@@ -45,8 +47,6 @@ For a single fold, view, or state:
 
     12ui convert <run-dir>/candidates/B.png --export html
 
-Runs ~5 minutes with streamed progress.
-
 For a full page or a multi-page site or app — the winner is viewport 1 of
 the first page; it needs no separate conversion:
 
@@ -55,12 +55,9 @@ the first page; it needs no separate conversion:
       --scope page|site --convert html
 
 The server plans the screens; the command dispatches, downloads, and
-converts one package per page. Returns immediately;
-`12ui branch status <run-dir>` reports progress (typically 5–15 min;
-large runs can take up to ~30 min).
+converts one package per page, into `<run-dir>/branch/pages/`.
 Wait for it rather than building the same pages by hand in the meantime —
 they are already being produced and paid for.
-Per-page HTML lands in `<run-dir>/branch/pages/`.
 
 ## 4. Integrate
 

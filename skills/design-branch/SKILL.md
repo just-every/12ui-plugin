@@ -16,7 +16,8 @@ One approved screen fixes the visual system; branching extends it across the
 rest of the surface with consistent, professional quality instead of
 re-deriving the design once per screen. The server plans the screens and
 their dependencies; one command executes the whole plan and keeps every paid
-screen addressable, so a retry never repeats paid work.
+screen addressable, so a retry never repeats paid work. Use it whenever the
+deliverable is more than one viewport; a single fold is a plain convert.
 
 ## 1. Execute
 
@@ -27,25 +28,20 @@ screen addressable, so a retry never repeats paid work.
 The run directory is the one `12ui draft` printed; the starting design is
 the candidate `12ui select` recorded there. `--scope page` grows that screen
 into viewports 2..n of its own page; `--scope site` adds sibling routes and
-app states as well. The server plans 2-8 screens (`--max-screens` trims the
-plan). `--convert html` converts each finished page as one ordered package;
-omitting it stops at downloaded PNGs.
-
-To start from something else, pass a fresh directory plus exactly one of
-`--winner-run crt-<id> --winner-slot <slot>` — an earlier hosted candidate,
-whose bytes never leave the server — or `--winner-image <file>` with a PNG,
-JPEG, or WebP. The starting design is viewport 1 of the first page; it needs
-no separate conversion.
+app states as well. `--convert html` converts each finished page as one
+ordered package; omitting it stops at downloaded PNGs. A run with no draft
+behind it takes a fresh directory and names its own starting design — the
+command refuses with both spellings if none is given. Either way the starting
+design is viewport 1 of the first page; it needs no separate conversion.
 
 ## 2. Follow
 
-    12ui branch status <run-dir>
+    12ui next <run-dir>
 
-Execute returns immediately and the run continues on its own (typically
-5–15 min, up to ~30 for large runs; add `--wait` to block instead).
-Status reports per-screen progress
-and the next action. `12ui branch resume <run-dir>` continues an interrupted
-run, replaying already-settled screens for free.
+Execute returns immediately; `12ui next` reports progress and the one command
+to run next, and `--wait` blocks instead of polling.
+`12ui branch resume <run-dir>` continues an interrupted run, replaying
+already-settled screens for free.
 
 ## 3. Collect
 
