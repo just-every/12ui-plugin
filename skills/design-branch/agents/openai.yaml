@@ -1,0 +1,8 @@
+interface:
+  display_name: "Design Branch"
+  short_description: "Expand one approved design into a whole site using 12ui design branch"
+  icon_small: "./assets/small-400px.png"
+  icon_large: "./assets/large-logo.svg"
+  default_prompt: "Use $design-branch to expand this homepage into a site."
+policy:
+  allow_implicit_invocation: true

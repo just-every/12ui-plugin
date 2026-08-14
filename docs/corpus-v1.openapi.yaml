@@ -1,0 +1,627 @@
+openapi: 3.1.0
+info:
+  title: 12UI Design Corpus API
+  version: 1.0.0
+  description: |
+    Account and quota-limited public access to 12UI visual inspiration.
+    Ranking is exposed only through the locked Direct, Balanced, and Adventurer
+    modes plus the account-tier `seed` slate-variation control. Caller-selected
+    ranking weights, arms, filters, experiments, standalone search, similarity
+    search, and allocation-style retrieval are not part of this contract.
+servers:
+  - url: https://12ui.com
+tags:
+  - name: Corpus
+
+paths:
+  /api/v1/corpus/inspire:
+    post:
+      tags: [Corpus]
+      operationId: inspireFromCorpus
+      summary: Find visual references in one locked product mode
+      description: |
+        `mode` defaults to `balanced`. Unknown request fields fail closed; old
+        experimental controls are never ignored. Account callers may include a
+        validated private reference image. Public-preview callers may not.
+
+        This is a quota-metered operation. Signed-in accounts use their free
+        daily allowance first and then reserve the published prepaid-wallet
+        price; public-preview callers remain sponsored. A stable
+        Idempotency-Key is claimed before dispatch and binds to the normalized
+        request. Completed calls replay durably; pending or ambiguous paid
+        effects cannot dispatch again under the same key.
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+        - publicPreview: []
+          publicVisitor: []
+          turnstile: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InspireRequest' }
+      responses:
+        '200':
+          description: Ordered inspiration references. Account callers receive ranking evidence; public callers receive a strict projection.
+          headers:
+            x-ratelimit-limit: { $ref: '#/components/headers/RateLimitLimit' }
+            x-ratelimit-remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            x-12ui-idempotent-replay: { $ref: '#/components/headers/IdempotentReplay' }
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/InspireAccountResponse'
+                  - $ref: '#/components/schemas/InspirePublicResponse'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/QueryRateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/corpus/featured:
+    get:
+      tags: [Corpus]
+      operationId: getFeaturedCorpusEdition
+      summary: Get the daily featured edition without an embedding query
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+        - publicPreview: []
+          publicVisitor: []
+      responses:
+        '200':
+          description: Daily sections. Public callers receive only servable reference IDs and rendition URLs.
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/FeaturedAccountResponse'
+                  - $ref: '#/components/schemas/FeaturedPublicResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    head:
+      tags: [Corpus]
+      operationId: headFeaturedCorpusEdition
+      summary: Check daily featured availability
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+        - publicPreview: []
+          publicVisitor: []
+      responses:
+        '200': { description: Featured edition exists }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/corpus/status:
+    get:
+      tags: [Corpus]
+      operationId: getCorpusStatus
+      summary: Get the active release and query contract revision
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+      responses:
+        '200':
+          description: Active corpus status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CorpusStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/corpus/references/{referenceId}:
+    get:
+      tags: [Corpus]
+      operationId: getCorpusReference
+      summary: Get account-only metadata for one reference
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+      parameters:
+        - $ref: '#/components/parameters/ReferenceId'
+      responses:
+        '200':
+          description: Corpus reference metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReferenceMetadata' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/ReferenceNotFound' }
+        '410': { $ref: '#/components/responses/TrackWithdrawn' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/corpus/designs/{designId}:
+    get:
+      tags: [Corpus]
+      operationId: getCorpusDesign
+      summary: Resolve one design by its stable public identity
+      description: The public design identity is content-derived and does not expose generation lineage.
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+        - publicPreview: []
+          publicVisitor: []
+      parameters:
+        - name: designId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-f0-9]{24}$' }
+      responses:
+        '200':
+          description: Account metadata or the strict public share projection.
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/ReferenceMetadata'
+                  - $ref: '#/components/schemas/PublicDesign'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/ReferenceNotFound' }
+        '410': { $ref: '#/components/responses/TrackWithdrawn' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/corpus/references/{referenceId}/profile:
+    get:
+      tags: [Corpus]
+      operationId: getCorpusReferenceProfile
+      summary: Get the account-only redacted-surface Mega39 profile for one reference
+      description: Returns the sealed 39 named score means plus elite and overall summaries. Critique text is never emitted.
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+      parameters:
+        - $ref: '#/components/parameters/ReferenceId'
+      responses:
+        '200':
+          description: Release-bound Mega39 profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Mega39Profile' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/ReferenceNotFound' }
+        '410': { $ref: '#/components/responses/TrackWithdrawn' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/corpus/references/{referenceId}/image:
+    get:
+      tags: [Corpus]
+      operationId: getCorpusReferenceImage
+      summary: Get an immutable thumbnail or reference rendition, including high-density variants
+      description: |
+        Authenticated callers are always admitted. A bare anonymous image GET is
+        also admitted while the public preview flag is enabled so browser image
+        elements can render without custom headers.
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/ReferenceId'
+        - $ref: '#/components/parameters/ImageSize'
+      responses:
+        '200':
+          description: Immutable WebP rendition
+          headers:
+            x-design-corpus-release: { $ref: '#/components/headers/DesignCorpusRelease' }
+            x-design-corpus-asset-release: { $ref: '#/components/headers/DesignCorpusAssetRelease' }
+            x-design-corpus-variant: { $ref: '#/components/headers/DesignCorpusVariant' }
+          content:
+            image/webp: {}
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/ReferenceNotFound' }
+        '410': { $ref: '#/components/responses/TrackWithdrawn' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+    head:
+      tags: [Corpus]
+      operationId: headCorpusReferenceImage
+      summary: Check an immutable rendition
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+        - {}
+      parameters:
+        - $ref: '#/components/parameters/ReferenceId'
+        - $ref: '#/components/parameters/ImageSize'
+      responses:
+        '200': { description: Rendition exists }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/ReferenceNotFound' }
+        '410': { $ref: '#/components/responses/TrackWithdrawn' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 12UI API key with the historical design.corpus.retrieve scope.
+    sessionToken:
+      type: apiKey
+      in: header
+      name: x-session-token
+      description: Same-origin authenticated browser session token, sent with session cookies.
+    publicPreview:
+      type: apiKey
+      in: header
+      name: X-12UI-Public-Preview
+    publicVisitor:
+      type: apiKey
+      in: header
+      name: X-12UI-Public-Visitor
+    turnstile:
+      type: apiKey
+      in: header
+      name: cf-turnstile-response
+
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 128 }
+    ReferenceId:
+      in: path
+      name: referenceId
+      required: true
+      schema:
+        type: string
+        pattern: '^(gen|logo-gen)-[A-Za-z0-9._-]{1,120}$'
+    ImageSize:
+      in: query
+      name: size
+      required: true
+      description: Legacy thumbnail/reference renditions and their additive high-density variants.
+      schema: { type: string, enum: [thumb, thumb-hd, ref, ref-hd] }
+
+  headers:
+    FundingSource:
+      description: >-
+        Server-derived funding source for an account query. Omitted for anonymous
+        callers. `admin` is a 12ui operator's own usage, metered but never drawn
+        from the sponsored pool.
+      schema: { type: string, enum: [sponsored, wallet, admin] }
+    RateLimitLimit:
+      schema: { type: integer, minimum: 0 }
+    RateLimitRemaining:
+      schema: { type: integer, minimum: 0 }
+    IdempotentReplay:
+      schema: { type: string, enum: ['true'] }
+    DesignCorpusRelease:
+      schema: { type: string }
+    DesignCorpusAssetRelease:
+      schema: { type: string }
+    DesignCorpusVariant:
+      schema: { type: string }
+
+  schemas:
+    InspirationMode:
+      type: string
+      enum: [direct, balanced, adventurer]
+
+    InspireRequest:
+      type: object
+      additionalProperties: false
+      required: [q]
+      properties:
+        q:
+          type: string
+          minLength: 1
+          description: Public callers are capped at 200 Unicode characters; account callers at 8,000 UTF-8 bytes.
+        mode:
+          $ref: '#/components/schemas/InspirationMode'
+          default: balanced
+        k:
+          type: integer
+          minimum: 1
+          maximum: 480
+          description: Public callers are capped at 24; account callers at 480.
+        seed:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+          description: |
+            Account tier only (public callers receive `unsupported_inspire_control`).
+            Varies the tail of the Balanced and Adventurer slates within a bounded
+            score window while the top-of-slate stays deterministic; 0 or absent
+            returns the canonical slate. Direct mode ignores the seed by design.
+            The same (q, mode, k, seed) always returns the same slate.
+        referenceImage:
+          $ref: '#/components/schemas/ReferenceImage'
+
+    ReferenceImage:
+      type: object
+      additionalProperties: false
+      required: [data, mediaType, sha256]
+      description: Account-only private redesign source; maximum decoded size 6 MB.
+      properties:
+        data: { type: string, contentEncoding: base64 }
+        mediaType: { type: string, enum: [image/png, image/jpeg, image/webp] }
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+
+    InspireEnvelope:
+      type: object
+      required: [setId, query, mode, seed, k, poolSize, coverage, truncated]
+      properties:
+        setId: { type: string }
+        query: { type: string }
+        mode: { $ref: '#/components/schemas/InspirationMode' }
+        seed: { type: integer }
+        k: { type: integer }
+        poolSize: { type: integer }
+        coverage: { type: number }
+        truncated: { type: boolean }
+
+    InspireAccountResponse:
+      allOf:
+        - $ref: '#/components/schemas/InspireEnvelope'
+        - type: object
+          required: [items]
+          properties:
+            designType:
+              oneOf:
+                - type: object
+                  additionalProperties: false
+                  required: [key, label, evidence, source]
+                  properties:
+                    key: { type: string }
+                    label: { type: string }
+                    evidence: { type: string }
+                    source: { type: string }
+                - type: 'null'
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/InspireAccountItem' }
+
+    InspirePublicResponse:
+      allOf:
+        - $ref: '#/components/schemas/InspireEnvelope'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/InspirePublicItem' }
+
+    InspireAccountItem:
+      type: object
+      required: [id, role, arm, cell, aspect, width, height, uiType, description, relevance, relevancePercentile, qualityPercentile]
+      properties:
+        id: { type: string }
+        # Truthful ownership labels (2026-08-04): 'consensus-head' for Balanced
+        # (combined-consensus selection), 'core' for Direct/Adventurer (the
+        # implicit query arm). 'stretch' remains for enum compatibility only;
+        # production modes never emit it.
+        role: { type: string, enum: [core, stretch, consensus-head] }
+        arm: { type: string }
+        # Balanced only: 'preserved' = exact deterministic head pick,
+        # 'frontier' = bounded score-frontier walk (near-twin veto, seeded
+        # slack). Absent for Direct/Adventurer, which have no phases.
+        phase: { type: string, enum: [preserved, frontier] }
+        cell: { type: [string, 'null'] }
+        aspect: { type: string, enum: [landscape, square, portrait] }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        uiType: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        relevance: { type: number }
+        relevancePercentile: { type: number }
+        qualityPercentile: { type: number }
+
+    InspirePublicItem:
+      type: object
+      additionalProperties: false
+      required: [id, designId, role, aspect, width, height, uiType, description, thumb, thumbHd, ref, refHd]
+      properties:
+        id: { type: string }
+        designId: { type: string, pattern: '^[a-f0-9]{24}$' }
+        role: { type: string, enum: [core, stretch, consensus-head] }
+        phase: { type: string, enum: [preserved, frontier] }
+        aspect: { type: string, enum: [landscape, square, portrait] }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        uiType: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        thumb: { type: string }
+        thumbHd: { type: string }
+        ref: { type: string }
+        refHd: { type: string }
+
+    FeaturedPublicResponse:
+      type: object
+      required: [version, date, sections]
+      properties:
+        version: { type: string }
+        date: { type: string }
+        sections:
+          type: array
+          items:
+            type: object
+            required: [key, label, picks]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              picks:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [id, designId, uiType, description, thumb, thumbHd, ref, refHd]
+                  properties:
+                    id: { type: string }
+                    designId: { type: string, pattern: '^[a-f0-9]{24}$' }
+                    aspect: { type: string, enum: [landscape, square, portrait] }
+                    width: { type: integer, minimum: 1 }
+                    height: { type: integer, minimum: 1 }
+                    uiType: { type: [string, 'null'] }
+                    description: { type: [string, 'null'] }
+                    thumb: { type: string }
+                    thumbHd: { type: string }
+                    ref: { type: string }
+                    refHd: { type: string }
+
+    FeaturedAccountResponse:
+      type: object
+      description: Trusted account-tier upstream featured evidence.
+      required: [version, date, sections]
+      properties:
+        version: { type: string }
+        date: { type: string }
+        sections:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    CorpusStatus:
+      type: object
+      required: [status, releaseId, model, dimensions, itemCount, queryIdempotencyRevision]
+      properties:
+        status: { type: string, enum: [ok] }
+        releaseId: { type: string }
+        model: { type: string, enum: [gemini-embedding-2] }
+        dimensions: { type: integer, enum: [3072] }
+        itemCount: { type: integer }
+        candidateCounts:
+          type: object
+          additionalProperties: { type: integer }
+        clusterVersion: { type: string }
+        bundle:
+          type: object
+          additionalProperties: { type: string }
+        queryIdempotencyRevision:
+          type: string
+          enum: [corpus-query-idempotency-v2]
+
+    ReferenceMetadata:
+      type: object
+      additionalProperties: true
+
+    PublicDesign:
+      type: object
+      additionalProperties: false
+      required: [designId, referenceId, width, height, thumb, thumbHd, ref, refHd]
+      properties:
+        designId: { type: string, pattern: '^[a-f0-9]{24}$' }
+        referenceId: { type: string }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        thumb: { type: string }
+        thumbHd: { type: string }
+        ref: { type: string }
+        refHd: { type: string }
+
+    Mega39Profile:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, referenceId, releaseId, surface, model, passes, dimSpecVersion, dimKeys, values, elite, overall]
+      properties:
+        schemaVersion: { type: string, enum: [mega39-profile-v1] }
+        referenceId: { type: string }
+        releaseId: { type: string }
+        surface: { type: string, enum: [redacted] }
+        model: { type: string }
+        passes: { type: integer }
+        dimSpecVersion: { type: string }
+        dimKeys:
+          type: array
+          minItems: 39
+          maxItems: 39
+          items: { type: string }
+        values:
+          type: array
+          minItems: 39
+          maxItems: 39
+          items: { type: number, minimum: 0, maximum: 100 }
+        elite: { type: number, minimum: 0, maximum: 100 }
+        overall: { type: number, minimum: 0, maximum: 100 }
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        message: { type: string }
+
+    Problem:
+      type: object
+      required: [type, title, status, detail, code, requestId, retryable]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        requestId: { type: string }
+        retryable: { type: boolean }
+
+  responses:
+    PaymentRequired:
+      description: The free Search allowance is exhausted and the prepaid wallet balance is insufficient.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, message, required_micros, available_micros]
+            properties:
+              error: { type: string, const: insufficient_funds }
+              message: { type: string }
+              required_micros: { type: integer, minimum: 1 }
+              available_micros: { type: integer, minimum: 0 }
+    ValidationError:
+      description: Invalid JSON, request, mode, removed control, reference image, or asset size.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: Authentication is absent or public preview is unavailable.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Scope, trusted-origin, Turnstile, or account-only reference-image requirement failed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    IdempotencyConflict:
+      description: Key conflict, in-progress attempt, or ambiguous original paid outcome.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    PayloadTooLarge:
+      description: Request exceeds the accepted byte limit.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    QueryRateLimited:
+      description: Daily query quota or shared sponsored budget is exhausted.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ServiceUnavailable:
+      description: Upstream corpus, durable idempotency, or cost accounting is unavailable.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ReferenceNotFound:
+      description: Reference does not exist or is not servable.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    TrackWithdrawn:
+      description: The reference ID belongs to a withdrawn corpus track.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

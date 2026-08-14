@@ -1,0 +1,356 @@
+openapi: 3.1.0
+info:
+  title: 12ui Create API
+  version: 1.1.0
+  description: >
+    The /create pipeline tool. A CREATE run turns a concept plus at most four
+    single-reference candidates into gpt-image-2 (quality medium) interface
+    designs. A BUILD run branches one approved design into a coherent screen
+    set: one metered gpt-5.6-terra director call plans the site or app
+    structure, and each planned screen is dispatched with worker-derived
+    references. A run is claimed once with an Idempotency-Key, then each slot
+    is dispatched; retries replay durable state and never repeat paid work,
+    and a NEW Idempotency-Key on a settled slot buys exactly one further paid
+    attempt. Anonymous callers use the public-preview identity headers with
+    Turnstile action `12ui_create_image`; signed-in callers use the session.
+    Daily image quotas: 12 public / 20 account (env-tunable).
+paths:
+  /api/v1/create:
+    post:
+      summary: Claim a create or build run and materialize its candidates
+      description: >
+        Two request shapes share this claim endpoint. A CREATE run (the
+        default schema below) supplies 1-4 candidates. A BUILD run instead
+        sends `{source: 'build', concept, winner | referenceImage, aspect?}`.
+        The build claim performs one metered gpt-5.6-terra branch-plan call
+        over the approved starting design (a succeeded candidate of an earlier
+        run via `winner: {createRunId, slot}`, or an uploaded image) and
+        materializes the planned screens as pending candidates in slots a-h.
+        The plan decides a source page (continuations below the approved
+        screen, or none when it already ends) plus 1-4 further pages or
+        application routes of 1-2 screens each; a plan larger than the eight
+        available slots is trimmed deterministically from the trailing pages.
+        Header, footer, and page-ending chrome are derived server-side from
+        the surface type and each screen's position, never asked of the model.
+        Build screens charge quota per dispatched slot rather than at claim.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/CreateRunRequest'
+                - $ref: '#/components/schemas/BuildRunRequest'
+      responses:
+        '201':
+          description: Run claimed; envelope of pending candidates.
+          headers:
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunEnvelope' }
+        '200':
+          description: Idempotent replay of an existing run.
+          headers:
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunEnvelope' }
+        '400': { description: Validation failure (unknown fields fail closed). }
+        '409': { description: Idempotency-Key reused with a different request. }
+        '402': { description: Free candidate allowance exhausted and prepaid wallet balance is insufficient. }
+        '429': { description: Daily image quota or sponsored budget exhausted. }
+        '502': { description: Branch planning failed after its bounded retry. }
+  /api/v1/create/{runId}:
+    get:
+      summary: Read a run's durable state
+      responses:
+        '200':
+          description: Run envelope.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunEnvelope' }
+        '404': { description: Unknown run (or another principal's run). }
+  /api/v1/create/{runId}/candidates/{slot}:
+    post:
+      summary: Dispatch one candidate's single gpt-image-2 call
+      description: >
+        Exactly one dispatch wins; concurrent calls receive 409
+        candidate_in_flight and completed candidates replay their stored
+        state. Failures (content policy, provider errors) settle as a failed
+        candidate in the envelope — never a repeated paid call.
+
+
+        BUILD screens additionally derive their source images server-side from
+        the stored plan, in the fixed order `[approved design, previous
+        viewport of this page, footer reference]` (deduped, approved design
+        always first) — the prompt names each image by that position. A screen
+        whose in-page predecessor has not succeeded is refused with 409
+        `dependency_pending`. A screen that draws a footer waits for the footer
+        SEED (the first footer-bearing slot in plan order) and is refused with
+        409 `footer_reference_pending` while the seed is pending or in flight;
+        once the seed has FAILED, later footer screens proceed without a
+        footer reference. The seed itself and non-footer screens never wait.
+
+
+        REGENERATE: sending a NEW Idempotency-Key for a `succeeded` or
+        `failed` slot authorizes exactly one further paid attempt with its own
+        effect key, ledger row, quota charge, and R2 object; the superseded
+        image stays stored until the run's TTL collects it. Sending no key, or
+        the key that already owns the row, replays durable state. Regenerating
+        one screen never invalidates another.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Run envelope with this candidate resolved.
+          headers:
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunEnvelope' }
+        '409':
+          description: >
+            Candidate already generating (`{error: 'candidate_in_flight'}`), or
+            a branch screen waiting on another screen's image.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      error: { type: string, enum: [candidate_in_flight] }
+                      message: { type: string }
+                  - $ref: '#/components/schemas/DependencyPendingError'
+        '410': { description: Run expired. }
+        '402': { description: Free candidate allowance exhausted and prepaid wallet balance is insufficient. }
+        '429': { description: Daily image quota or sponsored budget exhausted. }
+  /api/v1/create/{runId}/candidates/{slot}/image:
+    get:
+      summary: Serve a succeeded candidate's PNG to the owning principal
+      responses:
+        '200':
+          description: PNG bytes.
+          content:
+            image/png: {}
+        '404': { description: No stored image for this slot. }
+        '410': { description: Run expired. }
+components:
+  headers:
+    FundingSource:
+      description: >-
+        Server-derived funding source for this admitted operation. Never includes
+        a balance. `admin` is a 12ui operator's own usage, metered but never
+        drawn from the sponsored pool.
+      schema: { type: string, enum: [sponsored, wallet, admin] }
+  schemas:
+    ReferenceImage:
+      type: object
+      additionalProperties: false
+      required: [data, mediaType, sha256]
+      properties:
+        data: { type: string, description: Base64 image, 6MB decoded max. }
+        mediaType: { type: string, enum: [image/png, image/jpeg, image/webp] }
+        sha256: { type: string }
+    CreateRunRequest:
+      type: object
+      additionalProperties: false
+      required: [concept, candidates]
+      properties:
+        concept: { type: string, maxLength: 600 }
+        aspect:
+          type: string
+          enum: [landscape, portrait, square]
+          default: landscape
+        mode:
+          type: string
+          enum: [inspiration, preserve-structure]
+          default: inspiration
+        candidates:
+          type: array
+          minItems: 1
+          maxItems: 4
+          items:
+            type: object
+            additionalProperties: false
+            required: [slot]
+            properties:
+              slot: { type: string, enum: [a, b, c, d] }
+              referenceId:
+                type: string
+                description: Corpus reference conditioning this candidate.
+              useReferenceImage:
+                type: boolean
+                description: Condition on the run's uploaded referenceImage.
+              direction:
+                type: string
+                maxLength: 120
+                description: >
+                  The candidate's single desired quality. Omitted directions
+                  are derived server-side by one metered text call over the
+                  references' authored metadata.
+        referenceImage: { $ref: '#/components/schemas/ReferenceImage' }
+    BuildRunRequest:
+      type: object
+      additionalProperties: false
+      required: [source, concept]
+      description: Exactly one of `winner` or `referenceImage` must be present.
+      properties:
+        source: { type: string, enum: [build] }
+        concept: { type: string, maxLength: 600 }
+        aspect:
+          type: string
+          enum: [landscape, portrait, square]
+          description: Defaults to the winning run's aspect, else landscape.
+        winner:
+          type: object
+          additionalProperties: false
+          required: [createRunId, slot]
+          properties:
+            createRunId: { type: string, pattern: '^crt-[a-f0-9]{40}$' }
+            slot: { type: string, enum: [a, b, c, d, e, f, g, h] }
+        referenceImage: { $ref: '#/components/schemas/ReferenceImage' }
+    BranchPlan:
+      type: object
+      description: Present on build runs only. Absent on create runs.
+      required: [sitePurpose, statusUpdate, approvedScreenSummary, pages]
+      properties:
+        sitePurpose:
+          type: string
+          description: The core visitor or user value in one short sentence.
+        statusUpdate:
+          type: string
+          description: >
+            One or two first-person sentences for the user explaining what
+            this branch builds. Safe to render verbatim.
+        approvedScreenSummary:
+          type: string
+          description: What the approved design already says (context to subtract).
+        pages:
+          type: array
+          items:
+            type: object
+            required: [index, kind, title, pageType, surfaceType, purpose, slots]
+            properties:
+              index:
+                type: integer
+                description: >
+                  Plan position. 0 is always the source page; it is absent
+                  entirely when the approved screen already ends.
+              kind: { type: string, enum: [source, additional] }
+              title: { type: string }
+              pageType:
+                type: string
+                enum: [marketing, explanatory, directory, editorial, application, documentation, other]
+              surfaceType:
+                type: string
+                enum: [web_page, web_app, mobile_app, immersive]
+              purpose: { type: string }
+              sourceEndsHere:
+                type: boolean
+                description: Source page only.
+              slots:
+                type: array
+                description: This page's slots, in viewport order.
+                items: { type: string, enum: [a, b, c, d, e, f, g, h] }
+    Candidate:
+      type: object
+      required: [slot, status, direction, reference, width, height]
+      properties:
+        slot: { type: string, enum: [a, b, c, d, e, f, g, h] }
+        status: { type: string, enum: [pending, dispatched, succeeded, failed] }
+        direction:
+          type: string
+          description: >
+            Create runs: the candidate's desired quality. Build runs: the page
+            title, suffixed `(part N)` for later viewports of the same page.
+        reference:
+          type: object
+          required: [kind]
+          properties:
+            kind: { type: string, enum: [corpus, upload, artifact, none] }
+            referenceId: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+        image:
+          type: string
+          description: Present when status is `succeeded`.
+        error:
+          type: object
+          description: Present when status is `failed`.
+          properties:
+            code: { type: string }
+            message: { type: string }
+        pageIndex:
+          type: integer
+          description: Build screens only. Matches a `plan.pages[].index`.
+        viewportOrdinal:
+          type: integer
+          description: >
+            Build screens only. 1-based within an additional page; source
+            continuations begin at 2 because the approved design is screen 1.
+        header:
+          type: [boolean, 'null']
+          description: >
+            Build screens only. Derived: true on the first viewport of an
+            additional web_page; null on non-webpage surfaces.
+        footer:
+          type: [boolean, 'null']
+          description: >
+            Build screens only. Derived: true on the last viewport of a
+            web_page; null on non-webpage surfaces.
+        pageEndsHere:
+          type: boolean
+          description: Build screens only. True on each page's last screen.
+        dependsOnSlot:
+          type: [string, 'null']
+          description: >
+            Build screens only. The previous viewport of the same page, which
+            must succeed before this slot can be dispatched.
+        content:
+          type: string
+          description: Build screens only. The plan's semantic direction for this screen.
+    RunEnvelope:
+      type: object
+      required: [id, concept, aspect, mode, source, createdAt, expiresAt, candidates]
+      properties:
+        id: { type: string, pattern: '^crt-[a-f0-9]{40}$' }
+        concept: { type: string }
+        aspect: { type: string, enum: [landscape, portrait, square] }
+        mode: { type: string, enum: [inspiration, preserve-structure] }
+        source: { type: string, enum: [create, build] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        plan: { $ref: '#/components/schemas/BranchPlan' }
+        candidates:
+          type: array
+          items: { $ref: '#/components/schemas/Candidate' }
+    DependencyPendingError:
+      type: object
+      required: [error]
+      description: >
+        A branch screen refused because another screen's image is not ready.
+        `error` is an OBJECT here, unlike every other create error where it is
+        a string code; `message` is also mirrored at the top level.
+      properties:
+        error:
+          type: object
+          required: [code, dependsOn, message]
+          properties:
+            code:
+              type: string
+              enum: [dependency_pending, footer_reference_pending]
+            dependsOn:
+              type: string
+              description: The slot to dispatch first.
+              enum: [a, b, c, d, e, f, g, h]
+            message: { type: string }
+        message: { type: string }

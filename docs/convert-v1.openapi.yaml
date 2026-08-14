@@ -1,0 +1,3308 @@
+openapi: 3.1.0
+info:
+  title: 12ui Conversion API
+  version: 1.20.0
+  description: >-
+    Convert one static non-interlaced PNG, JPEG, or WebP into LayerDoc,
+    responsive HTML, fixed design formats, or versioned web and app project
+    bundles. A responsive HTML conversion additionally negotiates a
+    deterministic ZIP bundle of the same result, whose separate per-band asset
+    files let a viewer download only the bands it paints.
+    A public LayerDoc v2 can be used as the input for every output,
+    including a canonical LayerDoc republish used by package composition.
+    The edit resource accepts an owned LayerDoc plus a natural-language prompt
+    and always returns a LayerDoc. Project outputs require an exact versioned
+    `profile`; unsupported cross-products are rejected rather than substituted.
+servers:
+  - url: https://12ui.com
+x-12ui-public-preview:
+  uiPath: /convert
+  authentication:
+    headers:
+      X-12UI-Public-Preview: '1'
+      X-12UI-Public-Visitor: 32-byte lowercase hexadecimal browser identity
+    originRestricted: true
+  workflow:
+    source: image to LayerDoc
+    exports: [html, svg, png, jpg, webp, pdf, psd, pptx, sketch, web_project, app_project]
+    note: The final hydrated LayerDoc is reused; exports never repeat image extraction.
+  quotas:
+    window: UTC day
+    imageFast: 5
+    imageStandard: 2
+    imagePro: 0
+    exports: 20
+    layerDocEdits: 2
+    imageEdits: 5
+    key: salted client IP hash
+  costAccounting: >-
+    Anonymous runs are sponsored. Signed-in and API-key accounts use their
+    daily free allowance first, then reserve prepaid wallet funds at the
+    immutable published SKU price. Provider, model, request-id,
+    funding-source, reserved-budget, actual-cost, principal-tier, and
+    account-id records remain in non-cascading usage and cost ledgers after
+    conversion artifacts expire.
+x-12ui-account-quota:
+  window: UTC day
+  imageFast: 50
+  imageStandard: 20
+  imagePro: 2
+  exports: 200
+  layerDocEdits: 20
+  imageEdits: 30
+  key: stable account id
+paths:
+  /api/v1/convert:
+    post:
+      operationId: createConversion
+      summary: Create a conversion from an image, LayerDoc, bundled demo, or successful source conversion
+      security:
+        - bearerAuth: []
+        - browserSession: []
+        - publicPreviewMode: []
+          publicPreviewVisitor: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 128
+        - name: Prefer
+          in: header
+          required: false
+          description: Optional wait preference, limited to `wait=20`.
+          schema:
+            type: string
+            pattern: ^wait=([0-9]|1[0-9]|20)$
+        - $ref: '#/components/parameters/PublicPreviewMode'
+        - $ref: '#/components/parameters/PublicPreviewVisitor'
+      description: >-
+        API-key and authenticated-session callers may request any valid
+        input/output pair. The hosted public preview must send both public
+        preview headers. In that mode an image may produce only `layerdoc` and
+        requires `cf-turnstile-response`; the resulting hydrated LayerDoc may
+        then produce `html`, `svg`, `png`, `jpg`, `webp`, `pdf`, `psd`, `pptx`, `sketch`,
+        `web_project`, or `app_project` without a second image extraction.
+        Project outputs require the multipart `profile` JSON field. Public
+        preview image extraction may use `fast` or `standard`; `pro` requires
+        a signed-in account. Authenticated callers may alternatively submit an
+        unhydrated LayerDoc with repeated `asset` parts; each part filename
+        must exactly equal its referenced artifactId. The normalized input,
+        uploaded asset digests, output, model, profile, responsive quality, and
+        responsive anchor-plan revision form the idempotent
+        request identity; matching replays do not spend another quota unit.
+        An exact replay of a terminal image-to-LayerDoc materialization failure
+        may resume that stage under the same conversion ID only when its source,
+        pipeline, planning/admission contracts, artifacts, terminal paid-effect
+        outputs, provider-cost ledger, and settled usage still reconcile. This
+        recovery is dispatch-disabled: missing or incompatible paid-effect state
+        fails explicitly instead of calling a provider or recording another charge.
+        Authenticated callers may create responsive HTML from an existing
+        successful image-to-LayerDoc conversion by sending
+        `source_conversion_id`, `output=html`, and `responsive_quality`. This
+        reuses the canonical LayerDoc and raster assets, starts at responsive
+        reference generation, and consumes export quota instead of repeating
+        image extraction. A retained queued, running, or successful responsive
+        export with the same source, quality, output, derived contract revision,
+        and Worker pipeline revision is returned directly even when a later
+        button click supplies a different `Idempotency-Key`; it does not consume
+        quota or dispatch paid work again.
+        The web editor instead sends its exact current
+        hydrated `layerdoc` together with `source_conversion_id`; the lineage
+        is retained while the exact document is exported to responsive HTML,
+        fixed output, or project code without repeating image extraction. The
+        hosted web client may submit one allowlisted
+        `demo_id` with `output=layerdoc`; the Worker imports that demo's bundled
+        LayerDoc and rasters from its trusted static-asset binding, publishes a
+        normal visitor- or account-owned conversion, and performs no provider
+        request. Public demo admission requires Turnstile and consumes the
+        ordinary `export` quota. Matching idempotent replays consume no
+        additional quota. Subsequent saves, direct image edits, generated
+        images, exports, and `/edit` calls use the normal owned-conversion paths.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/ImageConversionRequest'
+                - $ref: '#/components/schemas/LayerDocConversionRequest'
+                - $ref: '#/components/schemas/DemoConversionRequest'
+                - $ref: '#/components/schemas/DerivedResponsiveHtmlConversionRequest'
+            encoding:
+              layerdoc:
+                contentType: 'application/vnd.12ui.layerdoc+json;version=2'
+              asset:
+                contentType: 'image/png, image/jpeg, image/webp'
+                style: form
+                explode: true
+              profile:
+                contentType: application/json
+      responses:
+        '202':
+          description: Conversion accepted or still running after the requested wait.
+          headers:
+            Location:
+              schema: { type: string }
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
+            Preference-Applied:
+              schema: { type: string }
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+            X-RateLimit-Bucket:
+              $ref: '#/components/headers/RateLimitBucket'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/RateLimitReset'
+            X-12ui-Funding:
+              $ref: '#/components/headers/FundingSource'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionOperation'
+        '200':
+          description: Conversion completed within the requested wait window.
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+            X-RateLimit-Bucket:
+              $ref: '#/components/headers/RateLimitBucket'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/RateLimitReset'
+            X-12ui-Funding:
+              $ref: '#/components/headers/FundingSource'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionOperation'
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '402':
+          description: The free allowance is exhausted and the prepaid wallet has insufficient available balance.
+          headers:
+            X-Billing-Required-Micros: { $ref: '#/components/headers/BillingRequiredMicros' }
+            X-Billing-Available-Micros: { $ref: '#/components/headers/BillingAvailableMicros' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ConversionProblem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429':
+          description: Daily quota, sponsored launch budget, or active conversion limit reached.
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+            X-RateLimit-Bucket:
+              $ref: '#/components/headers/RateLimitBucket'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/RateLimitReset'
+            Retry-After:
+              description: Seconds until retry. Daily quota exhaustion resets at the next UTC day.
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ConversionProblem'
+        '502': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/edit:
+    post:
+      operationId: createEdit
+      summary: Edit an owned LayerDoc with natural-language instructions
+      security:
+        - bearerAuth: []
+        - browserSession: []
+        - publicPreviewMode: []
+          publicPreviewVisitor: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+        - name: Prefer
+          in: header
+          required: false
+          description: Optional wait preference, limited to `wait=20`.
+          schema: { type: string, pattern: '^wait=([0-9]|1[0-9]|20)$' }
+        - $ref: '#/components/parameters/PublicPreviewMode'
+        - $ref: '#/components/parameters/PublicPreviewVisitor'
+      description: >-
+        Accepts one owned LayerDoc and one required `prompt`, and always returns
+        a LayerDoc. Hydrated artifact capabilities are verified against the
+        active account or public visitor before quota admission. Authenticated
+        callers may instead supply exact local raster bytes through repeated
+        `asset` parts. Public callers must supply `cf-turnstile-response` for
+        the `12ui_edit_layerdoc` action. The service renders a bounded
+        preview, sends that preview and a compact raster-free structural
+        projection to GPT-5.6 Terra, validates its small operation plan, and
+        deterministically applies it. Plans may update, add, duplicate, delete,
+        and move nodes, resolve semantic icon names through the icon store, or
+        request image generation, image editing, and background removal.
+        Provider plans never contain SVG bodies, raster bytes, artifact URLs,
+        or a full replacement LayerDoc. Prompt digest, paid effects, costs, and
+        outputs are durable; an idempotent retry cannot apply the plan twice or
+        repeat completed paid image work. One parent edit consumes the
+        independent `layerdoc_edit` quota (2/day public, 20/day account). Up to
+        eight planned image actions are admitted atomically against the shared
+        `image_edit` quota (5/day public, 30/day account) before any paid image
+        effect starts. Idempotent plan replays do not consume it twice.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LayerDocEditRequest'
+            encoding:
+              layerdoc:
+                contentType: 'application/vnd.12ui.layerdoc+json;version=2'
+              asset:
+                contentType: 'image/png, image/jpeg, image/webp'
+                style: form
+                explode: true
+      responses:
+        '202':
+          description: Edit accepted or still running after the requested wait.
+          headers:
+            Location: { schema: { type: string } }
+            Retry-After: { schema: { type: integer, minimum: 1 } }
+            Preference-Applied: { schema: { type: string } }
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            X-RateLimit-Bucket: { $ref: '#/components/headers/RateLimitBucket' }
+            X-RateLimit-Reset: { $ref: '#/components/headers/RateLimitReset' }
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversionOperation' }
+        '200':
+          description: Edit completed within the requested wait window.
+          headers:
+            X-RateLimit-Limit: { $ref: '#/components/headers/RateLimitLimit' }
+            X-RateLimit-Remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            X-RateLimit-Bucket: { $ref: '#/components/headers/RateLimitBucket' }
+            X-RateLimit-Reset: { $ref: '#/components/headers/RateLimitReset' }
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversionOperation' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '402':
+          description: The free Design-edit allowance is exhausted and the prepaid wallet has insufficient available balance.
+          headers:
+            X-Billing-Required-Micros: { $ref: '#/components/headers/BillingRequiredMicros' }
+            X-Billing-Available-Micros: { $ref: '#/components/headers/BillingAvailableMicros' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ConversionProblem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/edit/{id}:
+    get:
+      operationId: getEdit
+      summary: Read edit status or its negotiated final result
+      security:
+        - bearerAuth: []
+        - browserSession: []
+        - publicPreviewMode: []
+          publicPreviewVisitor: []
+        - signedArtifactId: []
+          signedArtifactExpiry: []
+          signedArtifactSignature: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: Accept
+          in: header
+          required: false
+          description: Application JSON or the media type of the requested edit output.
+          schema: { type: string }
+        - name: If-None-Match
+          in: header
+          required: false
+          description: Exact operation ETag used for conditional status polling.
+          schema: { type: string, minLength: 1 }
+        - name: Prefer
+          in: header
+          required: false
+          description: Optional JSON status wait preference, limited to `wait=20`.
+          schema: { type: string, pattern: '^wait=([0-9]|1[0-9]|20)$' }
+        - $ref: '#/components/parameters/PublicPreviewMode'
+        - $ref: '#/components/parameters/PublicPreviewVisitor'
+        - name: artifact
+          in: query
+          required: false
+          description: Allowlisted artifact id from a signed result URL.
+          schema: { type: string }
+        - name: expires
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: signature
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Edit operation state, artifact, or completed LayerDoc.
+          headers:
+            ETag: { $ref: '#/components/headers/ConversionOperationEtag' }
+            Content-Disposition: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversionOperation' }
+            application/vnd.12ui.layerdoc+json;version=2:
+              schema: { $ref: '#/components/schemas/PublicLayerDoc' }
+        '304':
+          description: The owned JSON operation projection is unchanged.
+          headers:
+            ETag: { $ref: '#/components/headers/ConversionOperationEtag' }
+            Retry-After: { schema: { type: integer, minimum: 1 } }
+            Preference-Applied: { schema: { type: string } }
+        '202':
+          description: A final representation was requested before it was ready.
+          headers:
+            Retry-After: { schema: { type: integer, minimum: 1 } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversionOperation' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '406': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/package:
+    post:
+      operationId: createConversionPackage
+      summary: Convert and compose a structured multi-page design package
+      security:
+        - bearerAuth: []
+        - browserSession: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 128 }
+      description: >-
+        Accepts ordered pages and vertical viewports. Every viewport supplies a
+        screenshot and may additionally supply an existing public LayerDoc v2
+        plus exact raster assets. Missing LayerDocs are converted in parallel;
+        supplied LayerDocs are canonically republished through the same durable
+        conversion pipeline. Page viewports must resolve to one common LayerDoc
+        width. The service conservatively normalizes repeated semantic
+        header/footer typography, builds a real vertically stitched source,
+        joins each page, and starts one ordinary conversion per final page for
+        the requested output. Existing HTML packages retain this per-page
+        behavior. An HTML manifest that explicitly includes
+        `site: {version: 1}` additionally requires one source at `index.html`,
+        canonical unique route-directory paths for every page, and page
+        title/purpose metadata. After its page exports succeed, the service
+        publishes one deterministic static-site ZIP containing exactly those
+        HTML paths plus `site-manifest.json`; every page receives accessible
+        navigation to every declared page, while optional layer bindings attach
+        specific generated actions to their declared targets. A generated
+        action the service cannot publish as a real link is neutralized into a
+        presentational element and recorded for operators rather than failing
+        the package. Duplicated charset, viewport, or description metadata in
+        a generated page is deduplicated to its first, canonicalized
+        declaration and recorded the same way. Assembly fails only when the
+        site would be structurally unusable. No viewport is scaled, fabricated, or replaced by a fallback.
+        The full multipart body is limited to 64 MiB, 32 pages, and 64
+        viewports in version 1.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConversionPackageRequest'
+            encoding:
+              manifest: { contentType: application/json }
+              screenshot:
+                contentType: 'image/png, image/jpeg, image/webp'
+                style: form
+                explode: true
+              layerdoc:
+                contentType: 'application/vnd.12ui.layerdoc+json;version=2'
+                style: form
+                explode: true
+              asset:
+                contentType: 'image/png, image/jpeg, image/webp'
+                style: form
+                explode: true
+      responses:
+        '202':
+          description: Package accepted and processing.
+          headers:
+            Location: { schema: { type: string } }
+            Retry-After: { schema: { type: integer, minimum: 1 } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversionPackageOperation' }
+        '200':
+          description: Idempotent replay of a completed package.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversionPackageOperation' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/package/{id}:
+    get:
+      operationId: getConversionPackage
+      summary: Read a conversion package and all child status
+      description: >-
+        Each page and viewport reports its child `conversion_id` as soon as the
+        child is admitted, and that id is stable for the life of the package. A
+        retryable child failure (an infrastructure or provider class attributed
+        to one of its stages) resumes under that same conversion id, reusing its
+        completed stages, paid effects, provider-cost ledger, and artifacts, so
+        the child's reported status may move from `failed` back to `queued`
+        while the package is still active. Retries are bounded per child; a
+        structural child failure, or an exhausted retry budget, fails the
+        package instead.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Current or terminal package operation, including status expired after retention ends.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversionPackageOperation' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/package/{id}/result:
+    get:
+      operationId: getConversionPackageResult
+      summary: Download the unified static-site ZIP for a successful HTML package
+      description: >-
+        Returns only the authenticated caller's immutable package artifact for
+        an HTML manifest that requested `site: {version: 1}`. The service
+        verifies the canonical owned storage key, media type, byte length,
+        stored SHA-256 metadata, and the bytes' computed SHA-256 before serving
+        the ZIP. A package without explicit site intent receives 400. A caller
+        that does not own the package receives 404.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Integrity-verified unified static-site ZIP.
+          headers:
+            Content-Disposition: { schema: { type: string } }
+            Content-Length: { schema: { type: integer, minimum: 1 } }
+            ETag: { schema: { type: string } }
+            X-Content-Sha256:
+              schema: { type: string, pattern: '^[a-f0-9]{64}$' }
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        '202':
+          description: The package is queued or running; returns its operation.
+          headers:
+            Location: { schema: { type: string } }
+            Retry-After: { schema: { type: integer, minimum: 1 } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversionPackageOperation' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/package/{id}/pages/{pageId}:
+    get:
+      operationId: getConversionPackagePage
+      summary: Read one page through its ordinary conversion result as soon as that page lands
+      description: >-
+        Progressive per-page delivery. This page is served the moment its own
+        chain lands — its export child conversion succeeded and holds a durable
+        result — independently of every sibling page and of the package's own
+        status. A page therefore redirects while the package is still `queued`
+        or `running`, and it keeps redirecting after a different page failed
+        the package: the package's own status and `error` stay honest about the
+        failure, but a page that was already correct is never retracted. The
+        unified static-site ZIP at `/result` is unaffected and still publishes
+        only once every page has succeeded. Retention is the one package-level
+        state that overrides availability: an expired package or an expired
+        child yields 410. Each page's current answer is reported ahead of time
+        as `available`, `available_at`, and `unavailable_reason` on the package
+        operation.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: pageId
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: Accept
+          in: header
+          required: false
+          description: Use application/json or the requested package output media type.
+          schema: { type: string }
+      responses:
+        '307':
+          description: >-
+            Redirect to the owned ordinary conversion holding this page's
+            document. Returned as soon as this page's own export child has
+            succeeded, whether the parent package is still running, already
+            succeeded, or was failed by a different page.
+          headers:
+            Location: { schema: { type: string, format: uri } }
+        '202':
+          description: >-
+            This page has not landed yet and the parent package is queued or
+            running; returns its operation without exposing partial page output.
+          headers:
+            Retry-After: { schema: { type: integer, minimum: 1 } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversionPackageOperation' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/quota:
+    get:
+      operationId: getConversionQuota
+      summary: Read the active conversion quota tier and all daily buckets
+      description: >-
+        Returns server-authoritative quota state for the calling principal.
+        Public callers are keyed by salted client IP; signed-in browser and API
+        callers are keyed by stable account id. The UTC window is shared by all
+        buckets, but each model and deterministic export bucket is independent.
+        A bucket `limit` of 1000000000 is the unlimited sentinel — used by 12ui
+        operator accounts, which are counted like everyone else but never
+        rate-limited. Treat any limit at or above it as "no daily ceiling";
+        `used`, `remaining`, and `available` stay ordinary arithmetic.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+        - publicPreviewMode: []
+          publicPreviewVisitor: []
+      parameters:
+        - $ref: '#/components/parameters/PublicPreviewMode'
+        - $ref: '#/components/parameters/PublicPreviewVisitor'
+      responses:
+        '200':
+          description: Current quota snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionQuotaSnapshot'
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/history:
+    get:
+      operationId: listConversionHistory
+      summary: List visible source conversions for the signed-in account
+      description: >-
+        Returns recent, unexpired image-to-LayerDoc conversions owned by the
+        resolved account. Public-preview history remains browser-local and is
+        not enumerable through this endpoint.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+      responses:
+        '200':
+          description: Newest-first visible conversion history.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionHistory'
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/history/{id}:
+    delete:
+      operationId: hideConversionHistoryItem
+      summary: Hide a conversion from account history
+      description: >-
+        Adds account-scoped presentation state only. The conversion run,
+        artifacts, accounting records, and evaluation evidence are unchanged.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        '204':
+          description: Conversion hidden from this account's history.
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/{id}:
+    get:
+      operationId: getConversion
+      summary: Read conversion status or its negotiated final result
+      description: >-
+        A signed artifact query authorizes only the exact artifact named by
+        `artifact`; it does not authorize operation status or final-result
+        reads. Public-preview operation and result reads require the same two
+        public headers and visitor identity used to create the run.
+        Unconditional JSON status reads omit ETag calculation. When a JSON
+        request sends `If-None-Match`, the response carries an exact weak ETag
+        over every run, progress, preview, and public-artifact input and may be
+        an empty `304` when that owned projection is unchanged.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+        - publicPreviewMode: []
+          publicPreviewVisitor: []
+        - signedArtifactId: []
+          signedArtifactExpiry: []
+          signedArtifactSignature: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: Accept
+          in: header
+          required: false
+          schema:
+            type: string
+            enum:
+              - application/json
+              - application/vnd.12ui.layerdoc+json;version=2
+              - text/html;profile="12ui-responsive-v1"
+              - text/html;profile="12ui-progressive-v1"
+              - application/zip;profile="12ui-responsive-bundle-v1"
+              - text/html;profile="12ui-fixed-v1"
+              - image/svg+xml
+              - image/png
+              - image/jpeg
+              - image/webp
+              - application/pdf
+              - image/vnd.adobe.photoshop
+              - application/vnd.openxmlformats-officedocument.presentationml.presentation
+              - application/zip
+              - application/vnd.12ui.web-project+zip;version=1
+              - application/vnd.12ui.app-project+zip;version=1
+        - name: If-None-Match
+          in: header
+          required: false
+          description: >-
+            Exact operation ETag retained from a prior conditional
+            `application/json` response. A polling client may establish its
+            first exact validator with the guaranteed-nonmatching bootstrap
+            value `W/"conversion-operation-bootstrap-v1"`. It is evaluated
+            only for the JSON status representation.
+          schema: { type: string, minLength: 1 }
+        - name: Prefer
+          in: header
+          required: false
+          description: >-
+            Optional JSON status wait preference, limited to `wait=20`. With a
+            matching `If-None-Match`, the server checks the full exact
+            projection at approximately one-second intervals before returning
+            `200`, or returns `304` when the window elapses.
+          schema:
+            type: string
+            pattern: ^wait=([0-9]|1[0-9]|20)$
+        - $ref: '#/components/parameters/PublicPreviewMode'
+        - $ref: '#/components/parameters/PublicPreviewVisitor'
+        - name: artifact
+          in: query
+          required: false
+          description: Allowlisted artifact id from a signed result URL.
+          schema: { type: string }
+        - name: expires
+          in: query
+          required: false
+          schema: { type: integer }
+        - name: signature
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Operation state or completed final representation.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConversionOperationEtag'
+            Content-Disposition:
+              description: >-
+                Final binary representations use `12ui-{id}.{filenameSuffix}`.
+                Project ZIP suffixes are `web-project.zip` and `app-project.zip`;
+                their physical media/container extension remains `zip`.
+              schema: { type: string }
+            X-12ui-Representation-State:
+              description: >-
+                Which content state the body is in. Sent only by the progressive
+                HTML representation, which is the only one whose bytes may not be
+                the conversion's result.
+              schema: { type: string, enum: [progressive, terminal] }
+            X-12ui-Conversion-Status:
+              description: >-
+                The run's own status at the moment the body was served. Sent with
+                the progressive HTML representation so a `progressive` body is
+                self-describing without a second request.
+              schema: { type: string }
+            X-12ui-Progressive-Bands:
+              description: >-
+                Responsive anchor bands present in the served document. Sent only
+                in the `progressive` state, where it is always `0`.
+              schema: { type: integer, minimum: 0 }
+            Vary:
+              description: >-
+                `accept` on the progressive HTML representation: it and the
+                terminal HTML representation share a URL and are told apart by
+                the `profile` media-type parameter alone.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionOperation'
+            application/vnd.12ui.layerdoc+json;version=2:
+              schema:
+                $ref: '#/components/schemas/PublicLayerDoc'
+            text/html;profile="12ui-responsive-v1":
+              schema:
+                type: string
+                description: >-
+                  Portable HTML with verified raster bytes embedded once. It
+                  contains no user or application business script.
+
+                  Every canvas in this document is a FIXED canvas: the design's
+                  declared geometry, scaled as one unit to fit a narrower host.
+                  What varies is how many canvases there are. A run that bought
+                  `responsive_quality` (or package `breakpoints`) carries one
+                  independently converted canvas per admitted width band, and
+                  exactly one band is displayed at any viewport width. A run
+                  that bought neither carries a single canvas and is
+                  byte-identical to the `text/html;profile="12ui-fixed-v1"`
+                  document the same design produces.
+
+                  No HTML output re-derives layout from per-element breakpoints.
+                  A document that reflowed states the design's real geometry
+                  only at or above its own canvas width and abandons it below,
+                  which silently loses content; that emission was retired from
+                  this lane in `layerdoc-worker-v172`. Reflowed source a
+                  developer edits is still available, as `web_project` output.
+            text/html;profile="12ui-progressive-v1":
+              schema:
+                type: string
+                description: >-
+                  Progressive delivery of a responsive HTML conversion: the best
+                  document that exists right now, whatever content state that is.
+                  A responsive result is assembled from the native desktop
+                  document plus one band per responsive anchor, and the desktop
+                  half becomes durable minutes before the assembled document
+                  does. Requesting this media type returns that desktop document
+                  while the anchors are still converting, and the assembled
+                  document once the conversion succeeds. Offered only by
+                  responsive HTML runs (`output=html` with `responsive_quality`);
+                  every other conversion answers `406`.
+
+                  The two states are never confusable. `X-12ui-Representation-State`
+                  is `progressive` or `terminal`, `X-12ui-Conversion-Status`
+                  repeats the run's own status, and `ETag` is state-qualified
+                  (`"progressive:<sha256>"` / `"terminal:<sha256>"`), so a
+                  progressive body can never be revalidated or cached into the
+                  terminal one. In the `progressive` state the document carries
+                  NO anchor bands (`X-12ui-Progressive-Bands: 0`) and is
+                  explicitly not the conversion's result: it renders at the
+                  design's native width and does not respond to narrower
+                  viewports. `Retry-After` is present in that state only.
+
+                  This representation never weakens the terminal contract. In
+                  the `terminal` state the bytes are exactly those served by
+                  `text/html;profile="12ui-responsive-v1"`, including when
+                  anchors were lost and the assembled document carries fewer
+                  bands than planned — a shorter document is still the result,
+                  never a progressive read. When nothing has been emitted yet
+                  the response is the ordinary `202`, whose envelope carries
+                  `progressive_document.unavailable_reason`. Asking for
+                  `text/html;profile="12ui-responsive-v1"` keeps its own
+                  behaviour unchanged: the assembled document, or `202`.
+            application/zip;profile="12ui-responsive-bundle-v1":
+              schema:
+                type: string
+                format: binary
+                description: >-
+                  Retired representation, still served while retained runs
+                  last. Deterministic ZIP bundle of the same responsive result:
+                  `index.html` derived byte-for-byte from the responsive HTML
+                  above but referencing relative `assets/<role>-<digest>.<ext>`
+                  files instead of embedded payloads, plus `bundle-manifest.json`.
+                  The builder was deleted when the responsive lane inverted to
+                  per-anchor conversions plus deterministic band assembly, so no
+                  conversion created from that change onward publishes a bundle
+                  and every such request answers `406`. Runs that succeeded
+                  before the change keep serving their stored archive until the
+                  artifact retention window expires; after expiry the whole
+                  conversion answers `410` `expired` for every representation,
+                  this one included, so a `406` here always means a live
+                  conversion that has no bundle to serve. Do not build new
+                  clients against it. Where it is still served: assets are the
+                  registered full-quality bytes, never recompressed; entries are
+                  stored uncompressed, ordered by code point, and carry a fixed
+                  timestamp, so identical inputs produce identical bytes.
+            text/html;profile="12ui-fixed-v1":
+              schema:
+                type: string
+                description: >-
+                  Portable fixed-layout HTML preserving the LayerDoc anchor
+                  coordinate system and exact canvas dimensions. It contains no
+                  responsive media policies, viewport-unit scaling, or menu collapse.
+            image/svg+xml:
+              schema:
+                type: string
+            application/pdf:
+              schema: { type: string, format: binary }
+            image/vnd.adobe.photoshop:
+              schema: { type: string, format: binary }
+            application/vnd.openxmlformats-officedocument.presentationml.presentation:
+              schema: { type: string, format: binary }
+            application/zip:
+              schema:
+                type: string
+                format: binary
+                description: A native `.sketch` ZIP container.
+            application/vnd.12ui.web-project+zip;version=1:
+              schema:
+                type: string
+                format: binary
+                description: Deterministic web project bundle using the same canonical responsive presentation for the persisted profile.
+            application/vnd.12ui.app-project+zip;version=1:
+              schema:
+                type: string
+                format: binary
+                description: Deterministic app project bundle for the persisted profile.
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        '304':
+          description: >-
+            The authenticated and owned JSON operation projection is unchanged
+            from `If-None-Match`. The response has no body.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ConversionOperationEtag'
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
+            Preference-Applied:
+              schema: { type: string }
+        '202':
+          description: A final representation was requested before it was ready.
+          headers:
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionOperation'
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+        '406': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/{id}/responsive-export:
+    get:
+      operationId: getLatestResponsiveExport
+      summary: Recover a retained responsive export for a source conversion
+      description: >-
+        Returns a non-expired responsive HTML child derived from the owned
+        source conversion. The optional quality filter lets `/convert` recover
+        Standard and Pro independently. Within that quality, an
+        active child is preferred over terminal siblings; ties use newest
+        creation time and id. This source-scoped lookup lets `/convert`
+        resume progressive responsive preview polling without navigating to or
+        persisting the child conversion URL. The source must belong to the
+        authenticated account; public-preview identity is not accepted.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Owned source conversion id.
+          schema: { type: string, minLength: 1 }
+        - name: quality
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ResponsiveConversionQuality' }
+      responses:
+        '200':
+          description: Latest retained responsive child operation.
+          headers:
+            Location:
+              description: Canonical polling path for the responsive child operation.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionOperation'
+        '204':
+          description: The source has no non-expired responsive child.
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/{id}/document-revision:
+    get:
+      operationId: getLatestConversionDocumentRevision
+      summary: Load the latest saved LayerDoc edit
+      description: >-
+        Returns the newest immutable structural revision for an owned,
+        completed, unexpired LayerDoc conversion. A conversion with no saved
+        edits returns `revision: null`; it never substitutes the original
+        conversion document for a missing revision.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+        - publicPreviewMode: []
+          publicPreviewVisitor: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+        - $ref: '#/components/parameters/PublicPreviewMode'
+        - $ref: '#/components/parameters/PublicPreviewVisitor'
+      responses:
+        '200':
+          description: Latest saved revision, or an explicit empty revision result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionLatestDocumentRevisionResponse'
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createConversionDocumentRevision
+      summary: Persist an immutable LayerDoc edit
+      description: >-
+        Validates and archives the exact hydrated LayerDoc before appending a
+        structural revision for an owned, completed, unexpired conversion.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+        - publicPreviewMode: []
+          publicPreviewVisitor: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - $ref: '#/components/parameters/PublicPreviewMode'
+        - $ref: '#/components/parameters/PublicPreviewVisitor'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversionDocumentRevisionRequest'
+      responses:
+        '200':
+          description: An idempotent saved revision was replayed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionDocumentRevisionResponse'
+        '201':
+          description: A new immutable revision was saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionDocumentRevisionResponse'
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/{id}/reference-assets:
+    post:
+      operationId: createConversionReferenceAsset
+      summary: Upload immutable visual guidance for later image edits
+      description: >-
+        Uploads one static PNG, JPEG, or WebP as an input scoped to an owned,
+        completed, unexpired LayerDoc conversion. Reference assets are stored
+        in a separate private registry and never appear in the conversion's
+        result artifacts. Replaying the same Idempotency-Key and exact body
+        returns the same stable reference id. Each conversion retains at most
+        64 uploaded reference assets.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [asset, label]
+              properties:
+                asset:
+                  type: string
+                  format: binary
+                  description: Static PNG, JPEG, or WebP no larger than 20 MiB, 8 megapixels, or 8192 pixels per side.
+                label:
+                  type: string
+                  minLength: 1
+                  maxLength: 120
+                  description: Printable user-facing description used to identify the reference in the provider prompt.
+      responses:
+        '200':
+          description: An idempotent completed reference upload was replayed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionReferenceAssetResponse'
+        '201':
+          description: A new immutable reference asset was stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionReferenceAssetResponse'
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '415': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /api/v1/convert/{id}/image-edit:
+    post:
+      operationId: createConversionImageEdit
+      summary: Apply one generative edit to an image artifact in a completed LayerDoc conversion
+      description: >-
+        The parent conversion must be owned by the caller, completed as
+        LayerDoc, and unexpired when the edit is admitted. Public-preview
+        callers are limited to five image edits per UTC day using a salted
+        client-IP subject; their visitor identity is used only for ownership.
+        Signed-in browser and API callers share a limit of thirty per owning
+        account. The same allowance is shared with raster image actions planned
+        inside LayerDoc Design edits. Idempotent replays do not consume another
+        quota unit or submit paid provider work again.
+      security:
+        - bearerAuth: []
+        - browserSession: []
+        - publicPreviewMode: []
+          publicPreviewVisitor: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - $ref: '#/components/parameters/PublicPreviewMode'
+        - $ref: '#/components/parameters/PublicPreviewVisitor'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversionImageEditRequest'
+      responses:
+        '200':
+          description: Image edit completed, or an idempotent completed edit was replayed.
+          headers:
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversionImageEditResponse'
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '405': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '410': { $ref: '#/components/responses/Problem' }
+        '413': { $ref: '#/components/responses/Problem' }
+        '402':
+          description: The free image-action allowance is exhausted and the prepaid wallet has insufficient available balance.
+          headers:
+            X-Billing-Required-Micros: { $ref: '#/components/headers/BillingRequiredMicros' }
+            X-Billing-Available-Micros: { $ref: '#/components/headers/BillingAvailableMicros' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ConversionProblem' }
+        '429':
+          description: The principal exhausted its shared UTC-day image-action quota or the sponsored budget.
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/RateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/RateLimitRemaining'
+            X-RateLimit-Bucket:
+              $ref: '#/components/headers/RateLimitBucket'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/RateLimitReset'
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ConversionProblem'
+        '503': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    PublicPreviewMode:
+      name: X-12UI-Public-Preview
+      in: header
+      required: false
+      description: >-
+        Set to `1` only for the hosted `/convert` sponsored public-preview
+        workflow. It explicitly selects anonymous public identity and must be
+        paired with X-12UI-Public-Visitor. Signed-in requests omit both public
+        preview headers and use the browser session.
+      schema:
+        type: string
+        const: '1'
+    PublicPreviewVisitor:
+      name: X-12UI-Public-Visitor
+      in: header
+      required: false
+      description: >-
+        Persistent browser-generated 32-byte lowercase hexadecimal identity.
+        Send the same value for the source create, every poll/result read, and
+        every LayerDoc export create. It is an ownership credential and must
+        not be placed in a URL.
+      schema:
+        type: string
+        pattern: '^[a-f0-9]{64}$'
+  headers:
+    FundingSource:
+      description: >-
+        Server-derived funding source for this admitted operation. Never includes
+        a balance. `sponsored` is 12ui's free tier, `wallet` is account-paid, and
+        `admin` is a 12ui operator's own usage, which is metered but never drawn
+        from the sponsored pool.
+      schema:
+        type: string
+        enum: [sponsored, wallet, admin]
+    BillingRequiredMicros:
+      description: >-
+        Price of the refused operation in USD micros. Returned only with 402,
+        so the caller can size a top-up without ever reading a balance.
+      schema: { type: integer, minimum: 1 }
+    BillingAvailableMicros:
+      description: >-
+        Wallet balance available to this operation in USD micros, at the moment
+        the reservation was refused. Returned only with 402.
+      schema: { type: integer, minimum: 0 }
+    ConversionOperationEtag:
+      description: >-
+        Exact weak validator for an application/json conversion operation,
+        including operation-visible D1 and R2 state. It is returned only when
+        the request supplied If-None-Match.
+      schema: { type: string, pattern: '^W/"conversion-operation-projection-v1:[a-f0-9]{64}"$' }
+    RateLimitBucket:
+      description: Independent daily bucket used to admit this request.
+      schema:
+        type: string
+        enum: [image_fast, image_standard, image_pro, export, layerdoc_edit, image_edit]
+    RateLimitLimit:
+      description: Daily limit for the admitted bucket and active principal tier.
+      schema: { type: integer, minimum: 0 }
+    RateLimitRemaining:
+      description: Remaining requests in the admitted bucket and UTC day.
+      schema: { type: integer, minimum: 0 }
+    RateLimitReset:
+      description: UTC-day reset as Unix epoch seconds.
+      schema: { type: integer, minimum: 1 }
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    browserSession:
+      type: apiKey
+      in: cookie
+      name: __Secure-better-auth.session_token
+    publicPreviewMode:
+      type: apiKey
+      in: header
+      name: X-12UI-Public-Preview
+      description: Hosted `/convert` public-preview mode marker. The value must be `1`.
+    publicPreviewVisitor:
+      type: apiKey
+      in: header
+      name: X-12UI-Public-Visitor
+      description: Persistent 64-character lowercase hexadecimal browser ownership identity.
+    signedArtifactId:
+      type: apiKey
+      in: query
+      name: artifact
+      description: Artifact identifier from an opaque signed href. Requires `expires` and `signature` too.
+    signedArtifactExpiry:
+      type: apiKey
+      in: query
+      name: expires
+      description: Expiry from an opaque signed href. Requires `artifact` and `signature` too.
+    signedArtifactSignature:
+      type: apiKey
+      in: query
+      name: signature
+      description: Signature from an opaque signed href. Requires `artifact` and `expires` too.
+  responses:
+    Problem:
+      description: Stable conversion problem.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ConversionProblem'
+  schemas:
+    ConversionPackageRequest:
+      type: object
+      additionalProperties: false
+      required: [manifest]
+      properties:
+        manifest:
+          $ref: '#/components/schemas/ConversionPackageManifestV1'
+        screenshot:
+          type: array
+          maxItems: 64
+          items: { type: string, format: binary }
+          description: >-
+            Exactly one static screenshot for every viewport that declares
+            screenshot_part. A viewport that declares source_conversion_id
+            instead sends no bytes. Each opaque multipart filename is
+            referenced by screenshot_part in the manifest.
+        layerdoc:
+          type: array
+          maxItems: 64
+          items: { type: string, format: binary }
+          description: Optional public LayerDoc v2 parts referenced by opaque multipart filename.
+        asset:
+          type: array
+          maxItems: 512
+          items: { type: string, format: binary }
+          description: >-
+            Exact raster assets for supplied LayerDocs. The manifest
+            maps each document-local artifact id to one globally unique opaque
+            multipart filename.
+    ConversionPackageManifestV1:
+      type: object
+      additionalProperties: false
+      required: [version, output, pages]
+      properties:
+        version: { type: integer, const: 1 }
+        source:
+          type: object
+          additionalProperties: false
+          required: [kind, project_id]
+          properties:
+            kind: { type: string, minLength: 1, maxLength: 80 }
+            project_id: { type: string, minLength: 1, maxLength: 160 }
+            revision: { oneOf: [{ type: string }, { type: integer }] }
+            authority_revision: { oneOf: [{ type: string }, { type: integer }] }
+        output: { $ref: '#/components/schemas/ConversionOutput' }
+        site:
+          $ref: '#/components/schemas/ConversionPackageSiteV1'
+          description: >-
+            Explicitly requests unified static-site validation and publication.
+            Accepted only when output is html. Omit to preserve the original
+            per-page HTML package behavior. During site assembly, each page's
+            existing id, title, and canonical path provide the only
+            label-based navigation evidence: an authored placeholder binds
+            only when its NFKC, lowercased, whitespace-collapsed visible text
+            exactly matches one unique page title. Partial or fuzzy matches
+            are never inferred. Declared navigation always wins over a
+            conflicting generated href. A generated anchor that stays inert or
+            points outside the supported route and link policy is neutralized
+            into a presentational element and recorded as a review warning on
+            that page's own conversion; it never fails assembly or discards a
+            sibling page's result. Duplicated document metadata (charset,
+            viewport, description) is likewise deduplicated to its first
+            declaration — canonicalized exactly as a single declaration would
+            be — and recorded as a review warning on that page's own
+            conversion instead of failing assembly.
+        responsive_quality:
+          $ref: '#/components/schemas/ResponsiveConversionQuality'
+          description: >-
+            Optional responsive HTML quality for every composed page child.
+            The quality participates in package and child request identity.
+        breakpoints:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { type: integer, minimum: 1 }
+          description: >-
+            The CSS viewport widths every composed page is asked to serve, as
+            an ascending prefix of the shipped responsive anchor ladder
+            ([390], [390, 768], or [390, 768, 1280]). The axis is orthogonal
+            to the package's page and screen axes: bands are produced inside
+            each page's own export child as ordinary per-anchor conversions,
+            so declaring widths selects which anchors that child buys rather
+            than adding a new kind of child. Accepted only when output is
+            html, and mutually exclusive with responsive_quality - both name
+            the same paid fact, and a declared set canonicalizes to the
+            quality the page children are bought under. A different declared
+            set is therefore different paid work and participates in package
+            and child request identity. Any other width set is refused rather
+            than quietly rounded up to a superset of anchors.
+        model: { $ref: '#/components/schemas/ConversionModel' }
+        profile: { $ref: '#/components/schemas/ConversionOutputProfile' }
+        pages:
+          type: array
+          minItems: 1
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/ConversionPackagePageInput'
+      allOf:
+        - $ref: '#/components/schemas/ProjectProfileRequirement'
+        - $ref: '#/components/schemas/ResponsiveQualityRequirement'
+        - $ref: '#/components/schemas/PackageBreakpointRequirement'
+        - if:
+            required: [site]
+          then:
+            properties:
+              output: { enum: [html, html_fixed] }
+              pages:
+                items:
+                  required: [kind, title, purpose, path]
+                  properties:
+                    path:
+                      pattern: '^(?:index\.html|[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?(?:/[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?)*\/index\.html)$'
+          else:
+            properties:
+              pages:
+                items:
+                  not:
+                    required: [navigation]
+    ConversionPackagePageInput:
+      type: object
+      additionalProperties: false
+      required: [id, ordinal, viewports]
+      description: >-
+        When the parent manifest declares site version 1, kind, title, purpose,
+        and path are required. Exactly one page must be kind source at
+        index.html; every other path must be a unique canonical lowercase route
+        directory ending in /index.html. Without site intent these properties
+        retain their original optional, per-page meaning.
+      properties:
+        id: { type: string, minLength: 1, maxLength: 160 }
+        ordinal: { type: integer, minimum: 0 }
+        kind: { type: string, enum: [source, additional] }
+        title: { type: string, maxLength: 200 }
+        purpose: { type: string, maxLength: 1000 }
+        path:
+          type: string
+          maxLength: 300
+          description: Canonical static-site path rules apply only when the parent manifest declares site version 1.
+        navigation:
+          type: array
+          maxItems: 256
+          description: >-
+            Static-site generated layer actions mapped to exact page ids.
+            Accepted only with parent manifest site version 1. Layer indices
+            must be unique within the page and targets must name pages in this
+            same manifest.
+          items:
+            $ref: '#/components/schemas/ConversionPackagePageNavigation'
+        viewports:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/ConversionPackageViewportInput'
+    ConversionPackagePageNavigation:
+      type: object
+      additionalProperties: false
+      required: [layer, target_page_id]
+      properties:
+        layer: { type: integer, minimum: 0 }
+        target_page_id: { type: string, minLength: 1, maxLength: 160 }
+    ConversionPackageSiteV1:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, const: 1 }
+    ConversionPackageViewportInput:
+      type: object
+      additionalProperties: false
+      required: [id, ordinal]
+      oneOf:
+        - required: [screenshot_part]
+          not: { anyOf: [{ required: [source_conversion_id] }, { required: [screenshot] }] }
+        - required: [source_conversion_id, screenshot]
+          not: { anyOf: [{ required: [screenshot_part] }, { required: [layerdoc] }] }
+      properties:
+        id: { type: string, minLength: 1, maxLength: 160 }
+        ordinal: { type: integer, minimum: 0 }
+        screenshot_part: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' }
+        source_conversion_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: >-
+            An already-succeeded, unexpired image-to-LayerDoc conversion, owned by
+            the caller's account, of exactly the bytes declared in `screenshot`. The
+            package attaches it instead of uploading the screenshot again and instead
+            of buying a second conversion of the same image. Requires `screenshot`;
+            mutually exclusive with `screenshot_part` and `layerdoc`. The package
+            refuses the request unless the conversion belongs to the caller's account,
+            was converted with the same `model` this package declares, has succeeded
+            with an image input and a LayerDoc output, still has at least an hour of
+            artifact lifetime left, uses a resume-compatible pipeline revision, and
+            matches the declared digest, media type, byte size, and dimensions
+            exactly. Visual similarity is never accepted, and an invalid reference is
+            refused rather than replaced with paid work. A conversion the account does
+            not own is reported as not found, so a reference cannot probe for one.
+        screenshot:
+          $ref: '#/components/schemas/ConversionPackageSourceScreenshot'
+        layerdoc:
+          type: object
+          additionalProperties: false
+          required: [part, assets]
+          properties:
+            part: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$' }
+            assets:
+              type: object
+              additionalProperties:
+                type: string
+                pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+              description: Document-local artifact id to globally unique multipart filename.
+    ConversionPackageSourceScreenshot:
+      type: object
+      additionalProperties: false
+      required: [sha256, media_type, size_bytes, width, height]
+      description: >-
+        The exact bytes a source-backed viewport asserts its referenced conversion
+        was admitted with. Declaring them keeps the package request fingerprint
+        content-addressed over the source image rather than over a conversion id,
+        so an idempotent replay compares image content. Every field is proved
+        against the conversion's durable admitted evidence.
+      properties:
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        media_type: { type: string, enum: [image/png, image/jpeg, image/webp] }
+        size_bytes: { type: integer, minimum: 1 }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+    ConversionPackagePageBand:
+      type: object
+      additionalProperties: false
+      required: [viewport_width, min_viewport_width, max_viewport_width, available]
+      description: >-
+        One responsive band a page serves. viewport_width is the anchor's own
+        CSS width; the min/max pair is the emitted media-query range that
+        anchor owns. Reported from the page's own export child, so it is the
+        set the page actually serves rather than an echo of the request: a
+        source too narrow for the widest anchor reports fewer bands than were
+        declared. Bands ship inside that page's one self-contained document,
+        so a band is fetchable exactly when its page is, and a failed or
+        mirrored sibling inherits the page's own unavailable reason.
+      properties:
+        viewport_width: { type: integer, minimum: 1 }
+        min_viewport_width: { type: integer, minimum: 0 }
+        max_viewport_width: { type: integer, minimum: 0 }
+        available: { type: boolean }
+        unavailable_reason:
+          type: string
+          enum: [unattached, pending, result_missing, expired]
+          description: Present only when available is false.
+    ConversionPackageOperation:
+      type: object
+      additionalProperties: false
+      required: [id, status, output, model, created_at, updated_at, expires_at, request_id, pages]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [queued, running, succeeded, failed, expired] }
+        output: { $ref: '#/components/schemas/ConversionOutput' }
+        responsive_quality:
+          $ref: '#/components/schemas/PersistedResponsiveConversionQuality'
+          description: Present only for responsive HTML packages.
+        model: { $ref: '#/components/schemas/ConversionModel' }
+        profile: { $ref: '#/components/schemas/ConversionOutputProfile' }
+        source: { type: object }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        request_id: { type: string }
+        progress:
+          type: object
+          required: [stage, percent, completed, total, running, pages_available]
+          properties:
+            stage: { type: string, enum: [convert_viewports, compose_pages, export_pages, publish] }
+            percent: { type: integer, minimum: 0, maximum: 100 }
+            completed: { type: integer, minimum: 0 }
+            total: { type: integer, minimum: 0 }
+            running:
+              type: integer
+              minimum: 0
+              description: >-
+                Children of the current phase converting right now. With
+                stage_since and updated_at this separates slow work from wedged
+                work while percent has not moved.
+            stage_since:
+              type: string
+              format: date-time
+              description: >-
+                When the package first entered this phase. Absent for a package
+                that entered its phase before phase timing was recorded.
+            pages_available:
+              type: integer
+              minimum: 0
+              description: >-
+                Pages already fetchable through their own href while the
+                package is still running.
+            bands_available:
+              type: integer
+              minimum: 0
+              description: >-
+                Responsive bands already fetchable, summed across every page.
+                Present only once at least one page reports a band axis.
+        quota_parked:
+          type: object
+          additionalProperties: false
+          required: [reason, detail, since]
+          properties:
+            reason: { type: string, const: quota_exhausted }
+            detail: { type: string }
+            since: { type: string, format: date-time }
+        pages:
+          type: array
+          items:
+            type: object
+            required: [id, ordinal, status, viewports, available]
+            properties:
+              id: { type: string }
+              ordinal: { type: integer, minimum: 0 }
+              kind: { type: string, enum: [source, additional] }
+              title: { type: string }
+              purpose: { type: string }
+              path: { type: string }
+              status: { type: string, enum: [queued, running, succeeded, failed] }
+              conversion_id: { type: string }
+              href: { type: string, format: uri }
+              media_type: { type: string }
+              available:
+                type: boolean
+                description: >-
+                  Whether href serves this page's document right now. True as
+                  soon as this page's own export child succeeds, including
+                  while the package is still running and after a sibling page
+                  has failed the package.
+              available_at:
+                type: string
+                format: date-time
+                description: When this page's export child completed. Present only when available.
+              unavailable_reason:
+                type: string
+                enum: [unattached, pending, result_missing, expired]
+                description: Present only when available is false.
+              bands:
+                type: array
+                maxItems: 3
+                items:
+                  $ref: '#/components/schemas/ConversionPackagePageBand'
+                description: >-
+                  The responsive bands this page serves. Present only for a
+                  responsive package whose page export child exists; until
+                  then the plan is genuinely undecided and is not echoed back
+                  as though it were the answer.
+              viewports:
+                type: array
+                items:
+                  type: object
+                  required: [id, ordinal, status]
+                  properties:
+                    id: { type: string }
+                    ordinal: { type: integer, minimum: 0 }
+                    status: { type: string, enum: [queued, running, succeeded, failed] }
+                    conversion_id: { type: string }
+        result:
+          type: object
+          required: [kind, media_type, pages, common_components, normalized_typography_fields]
+          properties:
+            kind: { type: string, const: package }
+            media_type: { type: string, const: 'application/vnd.12ui.package+json;version=1' }
+            pages:
+              type: array
+              items:
+                type: object
+                required: [id, ordinal, conversion_id, href, media_type, available]
+                properties:
+                  id: { type: string }
+                  ordinal: { type: integer, minimum: 0 }
+                  title:
+                    type: string
+                    description: Present for unified static-site package results.
+                  path:
+                    type: string
+                    description: Exact ZIP HTML entry path; present for unified static-site package results.
+                  conversion_id: { type: string }
+                  href: { type: string, format: uri }
+                  media_type: { type: string }
+                  available:
+                    type: boolean
+                    description: >-
+                      Whether href serves this page right now. Every page of a
+                      succeeded package has landed, so this is normally true;
+                      it is reported rather than assumed because a page child
+                      can reach its own retention after the package succeeded.
+                  unavailable_reason:
+                    type: string
+                    enum: [unattached, pending, result_missing, expired]
+                    description: Present only when available is false.
+                  bands:
+                    type: array
+                    maxItems: 3
+                    items:
+                      $ref: '#/components/schemas/ConversionPackagePageBand'
+                    description: The responsive bands this page serves.
+            artifact:
+              $ref: '#/components/schemas/ConversionPackageSiteArtifact'
+            common_components: { type: integer, minimum: 0 }
+            normalized_typography_fields: { type: integer, minimum: 0 }
+        error: { $ref: '#/components/schemas/ConversionProblem' }
+      allOf:
+        - $ref: '#/components/schemas/ResponsiveQualityRequirement'
+    ConversionPackageSiteArtifact:
+      type: object
+      additionalProperties: false
+      required: [href, media_type, size_bytes, sha256]
+      description: Present only when the successful HTML manifest requested site version 1.
+      properties:
+        href: { type: string, format: uri }
+        media_type: { type: string, const: application/zip }
+        size_bytes: { type: integer, minimum: 1 }
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+    LayerDocEditRequest:
+      type: object
+      additionalProperties: false
+      required: [layerdoc, prompt, output]
+      properties:
+        layerdoc:
+          type: string
+          format: binary
+          description: >-
+            Public LayerDoc v2 JSON under the ordinary 5 MiB limit. Signed
+            references must belong to the active account or public visitor, or
+            authenticated callers must supply exact local raster bytes through
+            repeated `asset` parts.
+        asset:
+          type: array
+          minItems: 1
+          items: { type: string, format: binary }
+          description: >-
+            One authenticated local raster part for every unhydrated LayerDoc
+            artifact reference, using the artifact id as the part filename.
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 8192
+          description: Natural-language edit request, limited to 8 KiB of UTF-8 text.
+        output:
+          type: string
+          const: layerdoc
+        cf-turnstile-response:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: Required for public-preview edit admission; omitted by authenticated callers.
+    ImageConversionRequest:
+      type: object
+      additionalProperties: false
+      required: [file, output]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: >-
+            Static non-interlaced PNG, JPEG, or WebP; at most 20 MiB, 8192 pixels
+            per side, and 8 megapixels. The web client resizes sources above
+            those dimension limits before upload. Admitted high-resolution
+            sources are then downscaled with their aspect ratio preserved before
+            model processing; direct API clients must respect the upload limits.
+        output:
+          $ref: '#/components/schemas/ConversionOutput'
+          description: Public-preview image requests must use `layerdoc`; authenticated callers may choose any output.
+        model:
+          $ref: '#/components/schemas/ConversionModel'
+        responsive_quality:
+          $ref: '#/components/schemas/ResponsiveConversionQuality'
+          description: >-
+            Optional authenticated image-to-HTML mode. The service generates
+            one, two, or three responsive reference anchors in parallel, converts
+            them to measured structure with GPT-5.6 Luna using thinking disabled,
+            and deterministically binds the native assets and text across the
+            admitted width bands. Omit this field and `output=html` publishes a
+            single fixed canvas instead: the design's declared geometry, scaled
+            as one unit to fit a narrower host, byte-identical to the
+            `html_fixed` document. Omitting it buys no anchor work and costs
+            nothing beyond the conversion itself.
+        export:
+          type: string
+          enum: [html]
+          description: >-
+            Optional fused convert-and-export directive, accepted only with
+            file input and `output=layerdoc` by an authenticated caller. The
+            service admits the image-to-LayerDoc conversion AND a responsive
+            HTML export of it as one account-boundary admission, and the
+            export's reference generation and per-anchor conversions run
+            ALONGSIDE the conversion's extraction and materialization instead
+            of queueing behind them. The bundle therefore completes in roughly
+            the time of its slower half rather than their sum. The export is an
+            ordinary separate conversion with its own id, ledger and operation
+            resource; the parent operation advertises it as `export`. Prices
+            are unchanged: the bundle charges exactly what this conversion plus
+            a `source_conversion_id` responsive export charge today, and both
+            halves keep their own idempotent identity, so replaying the same
+            request re-attaches both rather than re-buying either. The one
+            behavioural difference from the two-step flow is ordering: the
+            parent-derived admission checks that would otherwise refuse a
+            design before its reference is generated run after the reference
+            and anchor conversions, because their inputs do not exist until the
+            conversion's last stage completes.
+        export_quality:
+          $ref: '#/components/schemas/ResponsiveConversionQuality'
+          description: >-
+            Responsive anchor budget for the fused `export`. Defaults to
+            `standard`. Accepted only together with `export`.
+        source_scale:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 8
+          description: >-
+            Optional device pixel ratio of the captured raster. Use 2 for a 2x
+            screenshot so HTML breakpoints and CSS geometry are derived from
+            the logical dimensions the author saw. Omit for an unscaled 1x
+            image. Accepted only with file input and retained on LayerDoc
+            parents for later derived responsive HTML.
+        source_provenance:
+          type: string
+          enum: [upload, flat_render]
+          default: upload
+          description: >-
+            Declared origin of the uploaded raster, for callers that generated
+            it themselves. `upload` (the default) is a raster of unknown origin
+            — a screenshot, a photo, a flattened export — and runs the full
+            materialize lane set. `flat_render` declares a clean synthetic
+            render produced by a renderer or image generator, with no
+            photographic capture: alpha for its asset layers is derived from
+            the deterministic matte and the paid alpha-cutout provider
+            portfolio is not purchased, which removes the majority of
+            materialize spend on such sources. Declare it only when you know
+            how the pixels were produced — the service never infers it. Layers
+            whose deterministic matte is refused publish their exact source
+            crop and the parked lane is recorded as a conversion degradation
+            rather than failing the conversion. Accepted only with file input,
+            and it participates in request identity: the same bytes declared
+            differently are different requests.
+        profile:
+          $ref: '#/components/schemas/ConversionOutputProfile'
+          description: >-
+            Required only for `web_project` and `app_project`. Send as an
+            application/json multipart part or canonical UTF-8 JSON text.
+        cf-turnstile-response:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: >-
+            Required for public-preview image extraction and ignored as an
+            authentication substitute. The token must verify for the request
+            Origin and Turnstile action `12ui_convert_image`. Not used for
+            LayerDoc export requests; strict local preview requests are exempt.
+      allOf:
+        - $ref: '#/components/schemas/ProjectProfileRequirement'
+        - $ref: '#/components/schemas/ResponsiveQualityRequirement'
+    DemoConversionRequest:
+      type: object
+      additionalProperties: false
+      required: [demo_id, output]
+      properties:
+        demo_id:
+          type: string
+          enum: [lunar-heist-ii, monolith-porcelain, memory-kiosk]
+          description: Hosted bundled demo to import as an owned LayerDoc conversion.
+        output:
+          type: string
+          const: layerdoc
+        cf-turnstile-response:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: >-
+            Required for public-preview demo admission. The token must verify
+            for the request Origin and Turnstile action `12ui_convert_image`.
+            Omitted by authenticated callers.
+    LayerDocConversionRequest:
+      oneOf:
+        - $ref: '#/components/schemas/UnlinkedLayerDocConversionRequest'
+        - $ref: '#/components/schemas/LinkedLayerDocConversionRequest'
+    UnlinkedLayerDocConversionRequest:
+      type: object
+      additionalProperties: false
+      required: [layerdoc, output]
+      properties:
+        layerdoc:
+          type: string
+          format: binary
+          description: >-
+            Public LayerDoc v2 JSON. With no `asset` parts, signed raster
+            references must be hydrated, unexpired, and belong to the
+            authenticated account or the same public visitor identity. With
+            `asset` parts, refs may be unhydrated and the request requires an
+            authenticated account. At most 5 MiB. Arbitrary remote asset URLs
+            are not fetched.
+        asset:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: binary
+          description: >-
+            Authenticated local-asset mode only. Send one repeated `asset`
+            multipart part for every LayerDoc raster ref and no others. Each
+            filename must exactly equal artifactId. Bytes must be a static PNG,
+            JPEG, or WebP whose declared media type and pixel dimensions match
+            the ref. At most 512 parts are accepted; each part is limited to 20
+            MiB, all asset parts together to 60 MiB, and the complete multipart
+            request to 64 MiB. Assets are fingerprinted and stored durably
+            before export work begins.
+        output:
+          type: string
+          enum: [layerdoc, html, html_fixed, svg, png, jpg, webp, pdf, psd, pptx, sketch, web_project, app_project]
+        responsive_quality:
+          $ref: '#/components/schemas/ResponsiveConversionQuality'
+          description: >-
+            Optional for output=html when the LayerDoc has a verified source
+            raster artifact matching its admitted canvas.
+        profile:
+          $ref: '#/components/schemas/ConversionOutputProfile'
+          description: >-
+            Required only for `web_project` and `app_project`. Send as an
+            application/json multipart part or canonical UTF-8 JSON text.
+      allOf:
+        - $ref: '#/components/schemas/ProjectProfileRequirement'
+        - $ref: '#/components/schemas/ResponsiveQualityRequirement'
+    LinkedLayerDocConversionRequest:
+      type: object
+      additionalProperties: false
+      required: [layerdoc, source_conversion_id, output]
+      properties:
+        layerdoc:
+          type: string
+          format: binary
+          description: >-
+            The exact hydrated public LayerDoc v2 from the named source
+            conversion. At most 5 MiB. Its signed raster artifacts must still
+            belong to that source conversion and authenticated account.
+        source_conversion_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: >-
+            Account-owned successful LayerDoc conversion whose signed artifacts
+            hydrate this exact document. This linked form does not accept
+            uploaded `asset` parts, `cf-turnstile-response`, or `model`.
+        output:
+          type: string
+          enum: [html, html_fixed, svg, png, jpg, webp, pdf, psd, pptx, sketch, web_project, app_project]
+        responsive_quality:
+          $ref: '#/components/schemas/ResponsiveConversionQuality'
+          description: Required only for `output=html`.
+        profile:
+          $ref: '#/components/schemas/ConversionOutputProfile'
+          description: Required only for `web_project` and `app_project`.
+      allOf:
+        - if:
+            required: [output]
+            properties:
+              output: { const: html }
+          then:
+            required: [responsive_quality]
+        - $ref: '#/components/schemas/ProjectProfileRequirement'
+        - $ref: '#/components/schemas/ResponsiveQualityRequirement'
+    DerivedResponsiveHtmlConversionRequest:
+      type: object
+      additionalProperties: false
+      required: [source_conversion_id, output, responsive_quality]
+      properties:
+        source_conversion_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: >-
+            Account-owned successful image-to-LayerDoc conversion created by
+            the current pipeline revision. The original image, canonical
+            LayerDoc, and canonical raster assets must still be available.
+        output:
+          type: string
+          const: html
+        responsive_quality:
+          $ref: '#/components/schemas/ResponsiveConversionQuality'
+    ConversionOutput:
+      type: string
+      enum: [layerdoc, html, html_fixed, svg, png, jpg, webp, pdf, psd, pptx, sketch, web_project, app_project]
+    ConversionModel:
+      type: string
+      enum: [fast, standard, pro]
+      default: standard
+      description: >-
+        Image-conversion policy. All three tiers use GPT-5.6 Terra Low for
+        primary extraction. `fast` has no metadata refinement or 2x upscaling.
+        `standard` has no secondary metadata refinement and retains its 2x
+        upscale and downstream cleaning policy. `pro` retains a separate
+        GPT-5.6 Terra Low metadata-refinement call, 2x upscaling, and its
+        stricter downstream portfolio. Omit this field to select `standard`.
+        This field is not accepted for LayerDoc input.
+    ResponsiveConversionQuality:
+      type: string
+      enum: [standard, pro]
+      description: >-
+        Responsive visual-anchor budget: standard generates a 390px mobile
+        direction. Pro generates 390px mobile and 768px tablet directions, and
+        also generates a 1280px compact-desktop direction when native_width is
+        strictly greater than 1440px.
+    PersistedResponsiveConversionQuality:
+      type: string
+      enum: [standard, enhanced, pro]
+      description: >-
+        Quality stored on a responsive operation. Enhanced is retained only so
+        frozen historical operations remain readable; new requests accept only
+        standard or pro.
+    PackageBreakpointRequirement:
+      allOf:
+        - if:
+            required: [breakpoints]
+          then:
+            required: [output]
+            properties:
+              output: { const: html }
+        - if:
+            required: [breakpoints]
+          then:
+            not:
+              required: [responsive_quality]
+    ResponsiveQualityRequirement:
+      if:
+        required: [responsive_quality]
+      then:
+        required: [output]
+        properties:
+          output: { const: html }
+    ProjectProfileRequirement:
+      allOf:
+        - if:
+            required: [output]
+            properties:
+              output: { const: web_project }
+          then:
+            required: [profile]
+            properties:
+              profile: { $ref: '#/components/schemas/WebProjectProfileV1' }
+        - if:
+            required: [output]
+            properties:
+              output: { const: app_project }
+          then:
+            required: [profile]
+            properties:
+              profile: { $ref: '#/components/schemas/AppProjectProfileV1' }
+        - if:
+            required: [output]
+            properties:
+              output:
+                enum: [web_project, app_project]
+          else:
+            not:
+              required: [profile]
+    ConversionOutputProfile:
+      oneOf:
+        - $ref: '#/components/schemas/WebProjectProfileV1'
+        - $ref: '#/components/schemas/AppProjectProfileV1'
+    WebProjectProfileV1:
+      type: object
+      additionalProperties: false
+      required: [version, framework, styling, language, packaging]
+      properties:
+        version: { type: integer, const: 1 }
+        framework:
+          type: string
+          enum: [html, react, next, vue, nuxt, svelte, sveltekit, angular, astro, lit]
+        styling:
+          type: string
+          enum: [css, scss, css_modules, tailwind, bootstrap, mui, chakra, antd, shadcn]
+        language:
+          type: string
+          enum: [html, javascript, typescript]
+        packaging:
+          type: string
+          enum: [component, page, project]
+          description: >-
+            `component` is reusable component source, `page` adds a route/page
+            entrypoint, and `project` adds a runnable application scaffold.
+            Framework-specific cases below reject unsupported modes.
+      allOf:
+        - oneOf:
+            - properties:
+                framework: { const: html }
+                styling: { enum: [css, scss, tailwind, bootstrap] }
+                language: { const: javascript }
+                packaging: { enum: [component, page, project] }
+            - properties:
+                framework: { const: react }
+                styling: { enum: [css, scss, css_modules, tailwind, bootstrap, mui, chakra, antd, shadcn] }
+                language: { enum: [javascript, typescript] }
+                packaging: { enum: [component, page, project] }
+            - properties:
+                framework: { const: next }
+                styling: { enum: [css, scss, css_modules, tailwind, bootstrap, mui, chakra, antd, shadcn] }
+                language: { enum: [javascript, typescript] }
+                packaging: { enum: [page, project] }
+            - properties:
+                framework: { const: vue }
+                styling: { enum: [css, scss, tailwind, bootstrap] }
+                language: { enum: [javascript, typescript] }
+                packaging: { enum: [component, page, project] }
+            - properties:
+                framework: { const: nuxt }
+                styling: { enum: [css, scss, tailwind, bootstrap] }
+                language: { enum: [javascript, typescript] }
+                packaging: { enum: [page, project] }
+            - properties:
+                framework: { const: svelte }
+                styling: { enum: [css, scss, tailwind, bootstrap] }
+                language: { enum: [javascript, typescript] }
+                packaging: { enum: [component, page, project] }
+            - properties:
+                framework: { const: sveltekit }
+                styling: { enum: [css, scss, tailwind, bootstrap] }
+                language: { enum: [javascript, typescript] }
+                packaging: { enum: [page, project] }
+            - properties:
+                framework: { const: angular }
+                styling: { enum: [css, scss, tailwind, bootstrap] }
+                language: { const: typescript }
+                packaging: { enum: [component, page, project] }
+            - properties:
+                framework: { const: astro }
+                styling: { enum: [css, scss, tailwind, bootstrap] }
+                language: { enum: [javascript, typescript] }
+                packaging: { enum: [component, page, project] }
+            - properties:
+                framework: { const: lit }
+                styling: { enum: [css, scss] }
+                language: { enum: [javascript, typescript] }
+                packaging: { enum: [component, page, project] }
+    AppProjectProfileV1:
+      type: object
+      additionalProperties: false
+      required: [version, framework, styling, language, packaging]
+      properties:
+        version: { type: integer, const: 1 }
+        framework:
+          type: string
+          enum: [expo, react_native, flutter, ionic_capacitor, swiftui, uikit, jetpack_compose, android_views, compose_multiplatform]
+        styling: { type: string, enum: [native, css] }
+        language: { type: string, enum: [typescript, dart, swift, kotlin] }
+        packaging:
+          type: string
+          enum: [screen, project]
+          description: >-
+            `screen` is integration-ready screen source for an existing app;
+            `project` adds the runnable target scaffold and build configuration.
+      allOf:
+        - oneOf:
+            - properties:
+                framework: { const: expo }
+                styling: { const: native }
+                language: { const: typescript }
+            - properties:
+                framework: { const: react_native }
+                styling: { const: native }
+                language: { const: typescript }
+            - properties:
+                framework: { const: flutter }
+                styling: { const: native }
+                language: { const: dart }
+            - properties:
+                framework: { const: ionic_capacitor }
+                styling: { const: css }
+                language: { const: typescript }
+            - properties:
+                framework: { const: swiftui }
+                styling: { const: native }
+                language: { const: swift }
+            - properties:
+                framework: { const: uikit }
+                styling: { const: native }
+                language: { const: swift }
+            - properties:
+                framework: { const: jetpack_compose }
+                styling: { const: native }
+                language: { const: kotlin }
+            - properties:
+                framework: { const: android_views }
+                styling: { const: native }
+                language: { const: kotlin }
+            - properties:
+                framework: { const: compose_multiplatform }
+                styling: { const: native }
+                language: { const: kotlin }
+    ConversionStatus:
+      type: string
+      enum: [queued, running, succeeded, failed, expired]
+    ConversionQuotaBucket:
+      type: object
+      additionalProperties: false
+      required: [limit, remaining, available]
+      properties:
+        limit: { type: integer, minimum: 0 }
+        remaining: { type: integer, minimum: 0 }
+        available:
+          type: boolean
+          description: False when this bucket is unavailable for the active tier.
+    ConversionQuotaSnapshot:
+      type: object
+      additionalProperties: false
+      required: [tier, window_start, resets_at, buckets]
+      properties:
+        tier:
+          type: string
+          enum: [public, account]
+        window_start:
+          type: string
+          format: date
+        resets_at:
+          type: string
+          format: date-time
+        buckets:
+          type: object
+          additionalProperties: false
+          required: [image_fast, image_standard, image_pro, export, layerdoc_edit, image_edit]
+          properties:
+            image_fast: { $ref: '#/components/schemas/ConversionQuotaBucket' }
+            image_standard: { $ref: '#/components/schemas/ConversionQuotaBucket' }
+            image_pro: { $ref: '#/components/schemas/ConversionQuotaBucket' }
+            export: { $ref: '#/components/schemas/ConversionQuotaBucket' }
+            layerdoc_edit: { $ref: '#/components/schemas/ConversionQuotaBucket' }
+            image_edit: { $ref: '#/components/schemas/ConversionQuotaBucket' }
+    ConversionDocumentRevision:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - conversion_id
+        - parent_revision_id
+        - revision_index
+        - instruction
+        - document_sha256
+        - document_size_bytes
+        - created_at
+      properties:
+        id: { type: string, minLength: 1 }
+        conversion_id: { type: string, minLength: 1 }
+        parent_revision_id: { type: [string, 'null'] }
+        revision_index: { type: integer, minimum: 1 }
+        instruction: { type: [string, 'null'], maxLength: 1000 }
+        document_sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        document_size_bytes: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+    ConversionDocumentRevisionRequest:
+      type: object
+      additionalProperties: false
+      required: [document]
+      properties:
+        document: { $ref: '#/components/schemas/PublicLayerDoc' }
+        instruction: { type: string, minLength: 1, maxLength: 1000 }
+    ConversionDocumentRevisionResponse:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        revision: { $ref: '#/components/schemas/ConversionDocumentRevision' }
+    ConversionLatestDocumentRevisionResponse:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [revision]
+          properties:
+            revision: { type: 'null' }
+        - type: object
+          additionalProperties: false
+          required: [revision, document]
+          properties:
+            revision: { $ref: '#/components/schemas/ConversionDocumentRevision' }
+            document: { $ref: '#/components/schemas/PublicLayerDoc' }
+    ConversionImageEditRequest:
+      oneOf:
+        - $ref: '#/components/schemas/ConversionRemoveBackgroundRequest'
+        - $ref: '#/components/schemas/ConversionPromptImageEditRequest'
+        - $ref: '#/components/schemas/ConversionGenerateRegionRequest'
+      discriminator:
+        propertyName: operation
+        mapping:
+          remove-background: '#/components/schemas/ConversionRemoveBackgroundRequest'
+          prompt: '#/components/schemas/ConversionPromptImageEditRequest'
+          generate-region: '#/components/schemas/ConversionGenerateRegionRequest'
+    ConversionRemoveBackgroundRequest:
+      type: object
+      additionalProperties: false
+      required: [operation, source_artifact_id]
+      properties:
+        operation: { type: string, const: remove-background }
+        source_artifact_id: { type: string, minLength: 1, maxLength: 200 }
+        source_crop: { $ref: '#/components/schemas/ConversionImageEditBox' }
+    ConversionPromptImageEditRequest:
+      type: object
+      additionalProperties: false
+      required: [operation, prompt, source_artifact_id]
+      properties:
+        operation: { type: string, const: prompt }
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        source_artifact_id: { type: string, minLength: 1, maxLength: 200 }
+        source_crop: { $ref: '#/components/schemas/ConversionImageEditBox' }
+        quality: { $ref: '#/components/schemas/ConversionImageEditQuality' }
+        reference_asset_ids:
+          $ref: '#/components/schemas/ConversionImageEditReferenceIds'
+        reference_artifact_ids:
+          $ref: '#/components/schemas/ConversionImageEditReferenceIds'
+    ConversionGenerateRegionRequest:
+      type: object
+      additionalProperties: false
+      required: [operation, prompt, source_artifact_id, target_box]
+      properties:
+        operation: { type: string, const: generate-region }
+        prompt: { type: string, minLength: 1, maxLength: 1000 }
+        source_artifact_id: { type: string, minLength: 1, maxLength: 200 }
+        target_box: { $ref: '#/components/schemas/ConversionImageEditBox' }
+        quality: { $ref: '#/components/schemas/ConversionImageEditQuality' }
+        reference_asset_ids:
+          $ref: '#/components/schemas/ConversionImageEditReferenceIds'
+        reference_artifact_ids:
+          $ref: '#/components/schemas/ConversionImageEditReferenceIds'
+    ConversionImageEditReferenceIds:
+      type: array
+      maxItems: 15
+      uniqueItems: true
+      description: >-
+        Ordered, unique ids. Across reference_asset_ids and
+        reference_artifact_ids an edit accepts at most 15 ids total, and the
+        same id cannot appear in both. Uploaded references are sent first in
+        their array order, followed by registered artifacts in their array
+        order.
+      items:
+        type: string
+        minLength: 1
+        maxLength: 200
+    ConversionImageEditQuality:
+      type: string
+      enum: [low, medium, high]
+      default: low
+    ConversionImageEditBox:
+      type: array
+      minItems: 4
+      maxItems: 4
+      prefixItems:
+        - { type: integer, minimum: 0 }
+        - { type: integer, minimum: 0 }
+        - { type: integer, exclusiveMinimum: 0 }
+        - { type: integer, exclusiveMinimum: 0 }
+    ConversionImageEditResponse:
+      type: object
+      additionalProperties: false
+      required: [artifact]
+      properties:
+        artifact:
+          type: object
+          additionalProperties: false
+          required: [artifactId, url, expiresAt, mediaType, width, height, scale]
+          properties:
+            artifactId: { type: string }
+            url: { type: string, format: uri }
+            expiresAt: { type: string, format: date-time }
+            mediaType: { type: string, const: image/png }
+            width:
+              type: integer
+              minimum: 1
+              description: >-
+                Pixel width of the stored PNG behind `url`. The edit's logical
+                (source-space) width is width / scale.
+            height:
+              type: integer
+              minimum: 1
+              description: >-
+                Pixel height of the stored PNG behind `url`. The edit's logical
+                (source-space) height is height / scale.
+            scale:
+              type: number
+              exclusiveMinimum: 0
+              description: >-
+                Stored-artifact pixels per source-space pixel, rounded to four
+                decimal places. 1 for region, crop, and remove-background
+                edits; may exceed 1 for whole-image edits that keep the denser
+                provider render instead of resampling it back down.
+    ConversionReferenceAsset:
+      type: object
+      additionalProperties: false
+      required: [id, label, media_type, sha256, size_bytes, width, height, created_at]
+      properties:
+        id: { type: string, minLength: 1 }
+        label: { type: string, minLength: 1, maxLength: 120 }
+        media_type:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+        sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        size_bytes: { type: integer, minimum: 1, maximum: 20971520 }
+        width: { type: integer, minimum: 1, maximum: 8192 }
+        height: { type: integer, minimum: 1, maximum: 8192 }
+        created_at: { type: string, format: date-time }
+    ConversionReferenceAssetResponse:
+      type: object
+      additionalProperties: false
+      required: [reference_asset]
+      properties:
+        reference_asset:
+          $ref: '#/components/schemas/ConversionReferenceAsset'
+    ResponsiveConversionPlan:
+      type: object
+      additionalProperties: false
+      required: [revision, quality, native_width, anchors]
+      properties:
+        revision:
+          type: string
+          enum: [responsive-anchor-plan-v1, responsive-anchor-plan-v2, responsive-anchor-plan-v3, responsive-anchor-plan-v4, responsive-anchor-plan-v5, responsive-anchor-plan-v6]
+          description: >-
+            New runs use v6, which gives each anchor a viewport-proportional
+            image size. Frozen v5 retains uniform 1024x3072 images for
+            v136-v139 runs. Both use logical capture width for Standard mobile
+            or Pro mobile/tablet plus conditional 1280px compact desktop.
+            Frozen v4 retains raw-raster width for v133-v135 runs, v3 is
+            returned for persisted v114-v132 runs, v2 for v86-v113, and v1
+            for pre-v86 runs whose paid tier may contain fewer width-filtered
+            anchors.
+        quality: { $ref: '#/components/schemas/PersistedResponsiveConversionQuality' }
+        native_width:
+          type: integer
+          minimum: 391
+          description: >-
+            Authored logical HTML canvas width where the original topology
+            resumes. Current v6 and frozen v5 divide uploaded raster width by
+            source_scale while preserving that logical width when model
+            analysis uses a smaller prepared raster. This must exceed 390 px.
+            Frozen v4 uses raw raster width, and frozen v1/v2 runs retain
+            prepared width.
+        anchors:
+          type: array
+          minItems: 1
+          maxItems: 3
+          description: >-
+            In current v6, Standard has mobile. Pro has mobile plus tablet, and
+            adds compact desktop only when native_width is greater than 1440px.
+            A new paid tier is never returned with fewer anchors. Frozen v1 reads
+            retain their originally width-filtered set.
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, viewport_width, generator, generator_quality, image_size]
+            properties:
+              id: { type: string, enum: [mobile, tablet, compact-desktop] }
+              viewport_width: { type: integer, enum: [390, 768, 1024, 1280] }
+              generator: { type: string, const: gpt-image-2 }
+              generator_quality: { type: string, const: low }
+              image_size:
+                type: string
+                enum: [1024x3072, 1536x2048, 2048x1536]
+                description: >-
+                  Current v6 uses 1024x3072 for mobile, 1536x2048 for tablet,
+                  and 2048x1536 for compact desktop. Frozen v1-v5 plans use
+                  1024x3072 for every anchor.
+    ConversionProgressiveDocument:
+      type: object
+      description: >-
+        The progressive-delivery representation of this conversion, present only
+        on runs that have one at all (`output=html` with `responsive_quality`).
+        A responsive document is assembled from the native desktop document plus
+        one band per anchor child conversion, and the desktop half is durable
+        long before the assembled one; this field says whether that
+        representation currently serves anything and which content state it is
+        in. It is advertised at every point in the run, including while
+        unavailable, so a client never has to probe to find out.
+      required: [media_type, available]
+      additionalProperties: false
+      properties:
+        media_type:
+          type: string
+          const: text/html;profile="12ui-progressive-v1"
+          description: The Accept media type that fetches this representation.
+        available:
+          type: boolean
+          description: Whether that media type serves a document right now.
+        state:
+          type: string
+          enum: [progressive, terminal]
+          description: >-
+            Which content state those bytes are in. Present only when
+            `available`. `progressive` means the native desktop document with NO
+            anchor bands, while the conversion is still running — explicitly not
+            its result. `terminal` means the run succeeded and the bytes are the
+            assembled document, identical to the ordinary result representation.
+        unavailable_reason:
+          type: string
+          enum: [pending, document_missing, superseded, expired, failed]
+          description: >-
+            Present only when `available` is false. `pending` — the native
+            document is not emitted yet. `document_missing` — a document was
+            recorded and its durable bytes are unreadable or failed their
+            integrity check; an anomaly, not a waiting state. `superseded` — it
+            was emitted under contract revisions this build no longer serves.
+            `expired` — the conversion passed its retention. `failed` — the
+            conversion is terminal and produced no document.
+    ResponsiveConversionPreview:
+      type: object
+      additionalProperties: false
+      required: [revision, quality, completed, total, frames]
+      description: >-
+        Progressive, durable state for an admitted responsive HTML export.
+        LayerDoc input exposes the exact rendered source PNG used by responsive
+        generation as soon as it is durably registered. Frames stay in
+        admitted anchor-plan order. A frame gains its signed artifact as soon
+        as the real generated reference PNG is registered; extraction and
+        binding continue against that same artifact.
+      properties:
+        revision:
+          type: string
+          enum: [responsive-anchor-plan-v1, responsive-anchor-plan-v2, responsive-anchor-plan-v3, responsive-anchor-plan-v4, responsive-anchor-plan-v5, responsive-anchor-plan-v6]
+        quality: { $ref: '#/components/schemas/PersistedResponsiveConversionQuality' }
+        source:
+          allOf:
+            - $ref: '#/components/schemas/ConversionArtifact'
+          description: Exact rendered LayerDoc PNG used as the responsive visual source.
+        source_scale:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 8
+          description: >-
+            Device pixel ratio mapping the rendered source PNG to authored CSS
+            pixels. Omitted for an unscaled 1x source.
+        completed:
+          type: integer
+          minimum: 0
+          maximum: 9
+          description: Completed durable reference, extraction, and binding steps.
+        total:
+          type: integer
+          minimum: 3
+          maximum: 9
+          description: Three durable steps for each admitted anchor.
+        frames:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, viewport_width, phase]
+            properties:
+              id: { type: string, enum: [mobile, tablet, compact-desktop] }
+              viewport_width: { type: integer, enum: [390, 768, 1024, 1280] }
+              phase:
+                type: string
+                enum: [waiting, generating, generated, extracting, binding, complete]
+              artifact:
+                $ref: '#/components/schemas/ConversionArtifact'
+                description: >-
+                  Signed generated-reference PNG. Absent until generation and
+                  durable artifact registration complete for this anchor.
+    ConversionOperation:
+      type: object
+      additionalProperties: false
+      required: [id, input_kind, status, output, model, created_at, updated_at, expires_at, request_id]
+      properties:
+        id: { type: string }
+        input_kind:
+          type: string
+          enum: [image, layerdoc]
+        source_conversion_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Present when responsive HTML reused a successful source conversion.
+        export:
+          type: object
+          additionalProperties: false
+          required: [conversion_id, output, href]
+          description: >-
+            The responsive HTML export a fused `export=html` request admitted
+            alongside this conversion. It is an ordinary separate conversion:
+            poll `href` exactly as you would any other operation. Present only
+            on the parent of a fused operation.
+          properties:
+            conversion_id: { type: string, minLength: 1, maxLength: 128 }
+            output: { type: string, const: html }
+            href: { type: string, format: uri }
+        pipeline_revision:
+          type: string
+          minLength: 1
+          description: >-
+            Pipeline revision admitted for this run. Current projections always
+            include this field; clients may encounter its absence only in
+            payloads cached before the field was introduced.
+        status: { $ref: '#/components/schemas/ConversionStatus' }
+        output: { $ref: '#/components/schemas/ConversionOutput' }
+        model: { $ref: '#/components/schemas/ConversionModel' }
+        profile:
+          $ref: '#/components/schemas/ConversionOutputProfile'
+          description: Persisted canonical project profile; absent for non-project outputs.
+        responsive:
+          $ref: '#/components/schemas/ResponsiveConversionPlan'
+        responsive_preview:
+          $ref: '#/components/schemas/ResponsiveConversionPreview'
+        progressive_document:
+          $ref: '#/components/schemas/ConversionProgressiveDocument'
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        request_id: { type: string }
+        source:
+          $ref: '#/components/schemas/ConversionSource'
+        progress:
+          type: object
+          additionalProperties: false
+          required: [stage, percent]
+          properties:
+            stage: { type: string }
+            percent: { type: number, minimum: 0, maximum: 100 }
+            milestone:
+              type: string
+              enum: [structure_ready, standard_ready]
+            active:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConversionProgressLane'
+        error:
+          $ref: '#/components/schemas/ConversionProblem'
+        preview:
+          $ref: '#/components/schemas/LayerDocPreview'
+        previews:
+          type: array
+          minItems: 2
+          maxItems: 2
+          prefixItems:
+            - allOf:
+                - $ref: '#/components/schemas/LayerDocHistoricalPreview'
+                - type: object
+                  properties:
+                    quality: { const: structure }
+                    revision: { const: 2 }
+            - allOf:
+                - $ref: '#/components/schemas/LayerDocHistoricalPreview'
+                - type: object
+                  properties:
+                    quality: { const: standard }
+                    revision: { const: 3 }
+          items: false
+          description: >-
+            Immutable extraction history retained on successful image-input
+            LayerDoc conversions. Entries are always ordered structure first,
+            then standard, so a client that did not observe progressive
+            polling can still inspect both the unmerged extraction and the
+            later materialized document.
+        result:
+          oneOf:
+            - $ref: '#/components/schemas/LayerDocResult'
+            - $ref: '#/components/schemas/HtmlResult'
+            - $ref: '#/components/schemas/FixedHtmlResult'
+            - $ref: '#/components/schemas/SvgResult'
+            - $ref: '#/components/schemas/PngResult'
+            - $ref: '#/components/schemas/JpgResult'
+            - $ref: '#/components/schemas/WebpResult'
+            - $ref: '#/components/schemas/PdfResult'
+            - $ref: '#/components/schemas/PsdResult'
+            - $ref: '#/components/schemas/PptxResult'
+            - $ref: '#/components/schemas/SketchResult'
+            - $ref: '#/components/schemas/WebProjectResult'
+            - $ref: '#/components/schemas/AppProjectResult'
+      allOf:
+        - $ref: '#/components/schemas/ProjectProfileRequirement'
+    ConversionSource:
+      type: object
+      description: >-
+        Signed access to the original uploaded image. Present from admission
+        through expiry for image-input conversions, including while queued or
+        running. A captured source also reports its device pixel ratio when it
+        is not the default 1x scale.
+      additionalProperties: false
+      required: [href, media_type, expires_at, width, height]
+      properties:
+        href: { type: string, format: uri }
+        media_type: { type: string }
+        expires_at: { type: string, format: date-time }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        scale:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 8
+          description: >-
+            Device pixel ratio of the captured raster. Omitted for an unscaled
+            1x source.
+        filename: { type: string, minLength: 1 }
+    ConversionHistoryItem:
+      type: object
+      additionalProperties: false
+      required: [conversion_id, status, model, created_at, updated_at, expires_at, source]
+      properties:
+        conversion_id: { type: string, minLength: 1 }
+        status: { $ref: '#/components/schemas/ConversionStatus' }
+        model: { $ref: '#/components/schemas/ConversionModel' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        source: { $ref: '#/components/schemas/ConversionSource' }
+    ConversionHistory:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/ConversionHistoryItem' }
+    ConversionProgressLane:
+      type: object
+      additionalProperties: false
+      required: [kind, completed, total, status]
+      properties:
+        kind:
+          type: string
+          enum: [prepare, extract, clean, crop_1x, upscale_2x, cutout, edit, responsive_anchor, html_flow, export, publish]
+        completed: { type: integer, minimum: 0 }
+        total: { type: integer, minimum: 1 }
+        status:
+          type: string
+          enum: [waiting, running, complete, retrying]
+    ConversionProblem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, detail, request_id, retryable]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        code:
+          type: string
+          enum:
+            - invalid_request
+            - source_pipeline_stale
+            - missing_api_key
+            - insufficient_scope
+            - not_found
+            - idempotency_conflict
+            - expired
+            - payload_too_large
+            - unsupported_media_type
+            - image_decode_failed
+            - image_dimensions_exceeded
+            - layerdoc_invalid
+            - payment_required
+            - export_unsupported
+            - export_too_complex
+            - rate_limited
+            - conversion_parked
+            - provider_unavailable
+            - local_worker_restarted
+            - service_unavailable
+        detail: { type: string }
+        request_id: { type: string }
+        conversion_id: { type: string }
+        stage: { type: string }
+        retryable: { type: boolean }
+    ConversionArtifact:
+      type: object
+      additionalProperties: false
+      required: [id, role, media_type, sha256, href, expires_at]
+      properties:
+        id: { type: string }
+        role: { type: string }
+        media_type: { type: string }
+        sha256: { type: string }
+        href: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+        layer_index: { type: integer, minimum: 0 }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+    LayerDocResult:
+      type: object
+      additionalProperties: false
+      required: [kind, media_type, schema, schema_version, document, artifacts]
+      properties:
+        kind: { const: layerdoc }
+        media_type: { const: application/vnd.12ui.layerdoc+json;version=2 }
+        schema: { const: layerdoc }
+        schema_version: { const: 2 }
+        document: { $ref: '#/components/schemas/PublicLayerDoc' }
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ConversionArtifact' }
+    LayerDocPreview:
+      type: object
+      additionalProperties: false
+      required: [kind, media_type, schema, schema_version, quality, revision, document, artifacts]
+      properties:
+        kind: { const: layerdoc }
+        media_type: { const: application/vnd.12ui.layerdoc+json;version=2 }
+        schema: { const: layerdoc }
+        schema_version: { const: 2 }
+        quality:
+          type: string
+          enum: [structure, standard, edit]
+        revision: { type: integer, minimum: 1 }
+        pending_image_layer_z:
+          type: array
+          maxItems: 8
+          uniqueItems: true
+          description: >-
+            Present only for edit previews. Each value identifies a leaf whose
+            image operation is still pending in this preview document.
+          items: { type: integer, minimum: 0 }
+        document: { $ref: '#/components/schemas/PublicLayerDoc' }
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ConversionArtifact' }
+      allOf:
+        - if:
+            properties:
+              quality: { const: edit }
+            required: [quality]
+          then:
+            required: [pending_image_layer_z]
+          else:
+            not:
+              required: [pending_image_layer_z]
+    LayerDocHistoricalPreview:
+      type: object
+      additionalProperties: false
+      required: [kind, media_type, schema, schema_version, quality, revision, document, artifacts]
+      properties:
+        kind: { const: layerdoc }
+        media_type: { const: application/vnd.12ui.layerdoc+json;version=2 }
+        schema: { const: layerdoc }
+        schema_version: { const: 2 }
+        quality:
+          type: string
+          enum: [structure, standard]
+        revision:
+          type: integer
+          enum: [2, 3]
+          description: >-
+            Structure revision 2 preserves the separately published pre-merge
+            extraction. Standard currently uses revision 3.
+        document: { $ref: '#/components/schemas/PublicLayerDoc' }
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ConversionArtifact' }
+    HtmlResult:
+      type: object
+      description: >-
+        Portable HTML built from fixed canvases: one per admitted width band
+        when `responsive_quality` or package `breakpoints` were bought, and a
+        single canvas otherwise. A single-canvas result is byte-identical to
+        the `html_fixed` document the same design produces; only the media type
+        and the object it is published under differ. It contains no user or
+        application business script.
+      additionalProperties: false
+      required: [kind, media_type, href, artifacts]
+      properties:
+        kind: { const: html }
+        media_type: { const: text/html;profile="12ui-responsive-v1" }
+        href: { type: string, format: uri }
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ConversionArtifact' }
+    FixedHtmlResult:
+      type: object
+      description: >-
+        Fixed-layout HTML preserving the LayerDoc anchor coordinate system and
+        exact canvas dimensions without responsive release policies.
+      additionalProperties: false
+      required: [kind, media_type, href, artifacts]
+      properties:
+        kind: { const: html_fixed }
+        media_type: { const: text/html;profile="12ui-fixed-v1" }
+        href: { type: string, format: uri }
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ConversionArtifact' }
+    SvgResult:
+      allOf:
+        - $ref: '#/components/schemas/StaticExportResult'
+        - type: object
+          properties:
+            kind: { const: svg }
+            media_type: { const: image/svg+xml }
+    PngResult:
+      allOf:
+        - $ref: '#/components/schemas/StaticExportResult'
+        - type: object
+          description: >-
+            PNG export retains the native canvas when it fits the Worker memory
+            budget. Oversized PNGs use the largest proportional canvas admitted
+            by the bounded-memory exporter; layer geometry scales uniformly.
+          properties:
+            kind: { const: png }
+            media_type: { const: image/png }
+    JpgResult:
+      allOf:
+        - $ref: '#/components/schemas/StaticExportResult'
+        - type: object
+          properties:
+            kind: { const: jpg }
+            media_type: { const: image/jpeg }
+    WebpResult:
+      allOf:
+        - $ref: '#/components/schemas/StaticExportResult'
+        - type: object
+          properties:
+            kind: { const: webp }
+            media_type: { const: image/webp }
+    PdfResult:
+      allOf:
+        - $ref: '#/components/schemas/StaticExportResult'
+        - type: object
+          properties:
+            kind: { const: pdf }
+            media_type: { const: application/pdf }
+    PsdResult:
+      allOf:
+        - $ref: '#/components/schemas/StaticExportResult'
+        - type: object
+          properties:
+            kind: { const: psd }
+            media_type: { const: image/vnd.adobe.photoshop }
+    PptxResult:
+      allOf:
+        - $ref: '#/components/schemas/StaticExportResult'
+        - type: object
+          properties:
+            kind: { const: pptx }
+            media_type: { const: application/vnd.openxmlformats-officedocument.presentationml.presentation }
+    SketchResult:
+      allOf:
+        - $ref: '#/components/schemas/StaticExportResult'
+        - type: object
+          properties:
+            kind: { const: sketch }
+            media_type:
+              const: application/zip
+              description: A native `.sketch` ZIP container.
+    WebProjectResult:
+      type: object
+      additionalProperties: false
+      required: [kind, media_type, href, profile, artifacts]
+      properties:
+        kind: { const: web_project }
+        media_type: { const: application/vnd.12ui.web-project+zip;version=1 }
+        href: { type: string, format: uri }
+        profile: { $ref: '#/components/schemas/WebProjectProfileV1' }
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ConversionArtifact' }
+    AppProjectResult:
+      type: object
+      additionalProperties: false
+      required: [kind, media_type, href, profile, artifacts]
+      properties:
+        kind: { const: app_project }
+        media_type: { const: application/vnd.12ui.app-project+zip;version=1 }
+        href: { type: string, format: uri }
+        profile: { $ref: '#/components/schemas/AppProjectProfileV1' }
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ConversionArtifact' }
+    StaticExportResult:
+      type: object
+      description: >-
+        Fixed-layout export of the LayerDoc anchor canvas. The result keeps the
+        original geometry and does not run responsive HTML reflow. PNG may
+        proportionally reduce the complete canvas when native rasterization
+        would exceed the Worker memory budget.
+      required: [kind, media_type, href, artifacts]
+      properties:
+        kind:
+          type: string
+          enum: [svg, png, jpg, webp, pdf, psd, pptx, sketch]
+        media_type: { type: string }
+        href: { type: string, format: uri }
+        artifacts:
+          type: array
+          items: { $ref: '#/components/schemas/ConversionArtifact' }
+    PublicLayerDoc:
+      type: object
+      description: >-
+        Versioned public LayerDoc emitted by @just-every/layerdoc/core. One
+        self-sufficient JSON: a semantic layer tree with explicit paint
+        order, resolved CSS styling, and signed raster references. Pipeline
+        provenance is not exposed.
+      additionalProperties: false
+      required: [version, canvas, source, layers]
+      properties:
+        version: { type: string, const: '2' }
+        canvas:
+          type: object
+          additionalProperties: false
+          required: [width, height]
+          properties:
+            width: { type: integer, minimum: 1, maximum: 10000 }
+            height: { type: integer, minimum: 1, maximum: 10000 }
+        source:
+          $ref: '#/components/schemas/LayerSourceArtifactRef'
+        layers:
+          type: array
+          description: >-
+            Semantic tree. Paint LEAF layers in ascending z — group nodes are
+            structure only and are never painted. Tree order approximates
+            paint order but z is the authority (sections legitimately
+            interleave).
+          items:
+            $ref: '#/components/schemas/LayerNode'
+    LayerNode:
+      description: >-
+        Group nodes are the only nodes carrying `children` — discriminate on
+        its presence. Group nodes also declare kind "group"; leaf kind is an
+        open vocabulary.
+      oneOf:
+        - $ref: '#/components/schemas/LayerGroup'
+        - $ref: '#/components/schemas/PublicLayer'
+    LayerGroup:
+      type: object
+      additionalProperties: false
+      required: [kind, name, box, children]
+      properties:
+        kind: { const: group }
+        name: { type: string, minLength: 1, maxLength: 1024 }
+        box:
+          $ref: '#/components/schemas/LayerBox'
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/LayerNode'
+    LayerBox:
+      type: array
+      description: >-
+        [x, y, width, height] in canvas pixels. x and y are nonnegative,
+        width and height are positive, and the rectangle must be fully
+        contained by the document canvas. A group box is the union of its
+        descendant leaf boxes.
+      minItems: 4
+      maxItems: 4
+      prefixItems:
+        - { type: number, minimum: 0 }
+        - { type: number, minimum: 0 }
+        - { type: number, exclusiveMinimum: 0 }
+        - { type: number, exclusiveMinimum: 0 }
+    PublicLayer:
+      type: object
+      additionalProperties: false
+      required: [kind, content, z, box]
+      properties:
+        kind: { type: string, minLength: 1, maxLength: 128 }
+        content: { type: string, maxLength: 20000 }
+        z:
+          type: integer
+          minimum: 0
+          description: Global paint order across the whole document; 0 = backmost.
+        extractionIndex:
+          type: integer
+          minimum: 0
+          description: >-
+            Optional stable zero-based identity from the post-merge
+            materialization layer list, equal to conversion artifact
+            layer_index. Unlike z, it does not change when leaves are pruned
+            or moved. Older documents, pre-merge union members, and
+            editor-created leaves omit it.
+        box:
+          $ref: '#/components/schemas/LayerBox'
+        canvasBackdrop:
+          type: boolean
+          const: true
+          description: >-
+            Explicit render-facing ownership of the full-canvas raster ground,
+            derived from the extraction contract and never inferred from
+            full-canvas geometry alone.
+        surface:
+          type: string
+          description: >-
+            "raster" draws artifact pixels for this layer; any other value
+            (or absence) renders from style/typography.
+        fontSizePx: { type: number }
+        fittedFontSizePx:
+          type: number
+          exclusiveMinimum: 0
+          description: >-
+            Optional browser-measured font size for this exact content,
+            typography, and box. Renderers prefer it over fontSizePx.
+        textScaleX:
+          type: number
+          oneOf:
+            - { minimum: -2, maximum: -0.5 }
+            - { minimum: 0.5, maximum: 2 }
+          description: Optional signed horizontal glyph-outline scale; negative values mirror the glyphs and omission means 1.
+        textScaleY:
+          type: number
+          oneOf:
+            - { minimum: -2, maximum: -0.5 }
+            - { minimum: 0.5, maximum: 2 }
+          description: Optional signed vertical glyph-outline scale; negative values mirror the glyphs and omission means 1.
+        textColorRanges:
+          type: array
+          maxItems: 64
+          description: >-
+            Optional deterministic alternate ink colors over half-open UTF-16
+            content ranges. This measured render property is not requested from
+            the extraction model.
+          items:
+            type: object
+            additionalProperties: false
+            required: [start, end, color]
+            properties:
+              start: { type: integer, minimum: 0 }
+              end: { type: integer, minimum: 1 }
+              color: { type: string }
+        fontWeight: { type: number }
+        fontStyle: { type: string }
+        googleFontFamily: { type: string }
+        iconSvg:
+          type: string
+          description: Self-contained SVG geometry for an icon layer. No icon font or named icon dependency is required.
+        color: { type: string }
+        align: { type: string }
+        textRotationDeg: { type: number }
+        textSlantDeg: { type: number }
+        styleHint:
+          type: string
+          maxLength: 4096
+          description: >-
+            Safe descriptive extraction hint retained for non-surface effects,
+            such as text shadows and divider colors. This is never raw CSS.
+        style:
+          $ref: '#/components/schemas/LayerStyle'
+        artifacts:
+          $ref: '#/components/schemas/LayerArtifacts'
+    LayerStyle:
+      type: object
+      description: >-
+        Open CSS declaration map using React-style keys. Keys and loose JSON
+        values are normalized by the pipeline; each published value is a CSS
+        string. Unsupported browser properties may remain for forward
+        compatibility.
+      additionalProperties:
+        type: string
+    LayerArtifacts:
+      type: object
+      description: Raster references for this layer. Present only when produced.
+      additionalProperties: false
+      dependentRequired:
+        plate2x: [plate]
+      properties:
+        plate:
+          $ref: '#/components/schemas/LayerPlateRef'
+        plate2x:
+          $ref: '#/components/schemas/LayerPlate2xRef'
+        region2x:
+          $ref: '#/components/schemas/LayerPixelArtifactRef'
+        cutout:
+          $ref: '#/components/schemas/LayerPixelArtifactRef'
+        crop:
+          $ref: '#/components/schemas/LayerPixelArtifactRef'
+    LayerArtifactRef:
+      type: object
+      additionalProperties: false
+      required: [artifactId, url, expiresAt]
+      properties:
+        artifactId: { type: string }
+        url:
+          type: string
+          format: uri
+          description: Signed HTTPS href, hydrated on every API response.
+        expiresAt: { type: string, format: date-time }
+        mediaType: { type: string }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        scale:
+          type: number
+          exclusiveMinimum: 0
+          description: >-
+            Artifact pixels per canvas pixel, measured from the artifact
+            dimensions against the box it covers (2 = retina master).
+    LayerSourceArtifactRef:
+      allOf:
+        - $ref: '#/components/schemas/LayerArtifactRef'
+        - type: object
+          required: [width, height]
+    LayerPixelArtifactRef:
+      type: object
+      additionalProperties: false
+      required: [artifactId, url, expiresAt]
+      properties:
+        artifactId: { type: string }
+        url:
+          type: string
+          format: uri
+          description: Signed HTTPS href, hydrated on every API response.
+        expiresAt: { type: string, format: date-time }
+        mediaType: { type: string }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        scale:
+          type: number
+          exclusiveMinimum: 0
+          description: >-
+            Artifact pixels per canvas pixel, measured from the artifact
+            dimensions against the box it covers (2 = retina master).
+        pixels:
+          type: string
+          enum: [source, matted, cleaned]
+          description: >-
+            Optional pixel provenance for these bytes. "source" is a proof: the
+            bytes are a lossless crop of the prepared source at the layer
+            geometry (or its pure 2x upscale). "matted" means the RGB channels
+            are unchanged source pixels and only alpha was synthesized.
+            "cleaned" means the pixels derive from a generative clean, a
+            provider-returned RGB image, or any producer that cannot prove the
+            stronger claims. Absence means unknown: consumers must then behave
+            exactly as they did before this field existed.
+    LayerPlate2xRef:
+      type: object
+      additionalProperties: false
+      required: [artifactId, url, expiresAt]
+      properties:
+        artifactId: { type: string }
+        url:
+          type: string
+          format: uri
+          description: Signed HTTPS href, hydrated on every API response.
+        expiresAt: { type: string, format: date-time }
+        mediaType: { type: string }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        scale: { type: number, exclusiveMinimum: 0 }
+        mode:
+          type: string
+          enum: [plate, overlay]
+          description: >-
+            Optional cleanup mode, copied verbatim from the plate this artifact
+            upscales, so a consumer never has to read the sibling plate slot.
+            Absent only on documents published before this field existed.
+    LayerPlateRef:
+      type: object
+      additionalProperties: false
+      required: [artifactId, url, expiresAt, mode]
+      properties:
+        artifactId: { type: string }
+        url: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+        mediaType: { type: string }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        scale: { type: number, exclusiveMinimum: 0 }
+        mode:
+          type: string
+          enum: [plate, overlay]
+          description: >-
+            plate = everything declared above was removed (redraw declared
+            layers on top); overlay = only readable text was removed.

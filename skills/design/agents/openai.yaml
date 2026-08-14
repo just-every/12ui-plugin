@@ -1,0 +1,8 @@
+interface:
+  display_name: "Design"
+  short_description: "Use the 12ui design framework to quickly create high quality UI"
+  icon_small: "./assets/small-400px.png"
+  icon_large: "./assets/large-logo.svg"
+  default_prompt: "Use $design to create a new homepage for this project."
+policy:
+  allow_implicit_invocation: true

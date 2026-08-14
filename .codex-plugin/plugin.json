@@ -1,0 +1,45 @@
+{
+  "name": "12ui-design",
+  "version": "0.2.20",
+  "description": "Create distinctive interfaces with 12UI design skills and hosted design APIs.",
+  "author": {
+    "name": "Just Every",
+    "email": "support@12ui.com",
+    "url": "https://12ui.com/"
+  },
+  "homepage": "https://12ui.com/skill",
+  "repository": "https://github.com/just-every/12ui-plugin",
+  "license": "MIT",
+  "keywords": [
+    "12ui",
+    "design",
+    "ui-generation",
+    "image-to-code",
+    "agent-skills",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "12UI Design",
+    "shortDescription": "Create and convert distinctive interface designs",
+    "longDescription": "Search real design references, draft visual directions, expand an approved design into complete pages, and convert finished images into production-ready output.",
+    "developerName": "Just Every",
+    "category": "Design",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://12ui.com/",
+    "privacyPolicyURL": "https://12ui.com/privacy",
+    "termsOfServiceURL": "https://12ui.com/terms",
+    "defaultPrompt": [
+      "Create a distinctive interface for this project.",
+      "Find strong visual references before redesigning this page.",
+      "Turn this finished design image into production code."
+    ],
+    "brandColor": "#0F172A",
+    "composerIcon": "./assets/12ui-icon.png",
+    "logo": "./assets/12ui-logo.svg",
+    "screenshots": []
+  }
+}

@@ -1,0 +1,8 @@
+interface:
+  display_name: "Design Search"
+  short_description: "Instantly find reference screenshots from the 12ui design corpus"
+  icon_small: "./assets/small-400px.png"
+  icon_large: "./assets/large-logo.svg"
+  default_prompt: "Run a $design-search to find homepage concepts."
+policy:
+  allow_implicit_invocation: true
