@@ -4,7 +4,7 @@ Public, installable distribution of the five 12ui design skills and their API
 contracts. The hosted service and documentation live at [12ui.com](https://12ui.com/).
 
 This repository is generated from the private 12ui implementation at the exact
-`@12ui/design` release revision. Version **0.2.23** matches the npm package.
+`@12ui/design` release revision. Version **0.2.24** matches the npm package.
 
 ## Install
 
@@ -49,6 +49,6 @@ repository.
 ## Provenance
 
 Every release is generated from a fixed allowlist, validated for exact skill
-and contract parity, tagged `design-v0.2.23`, and published only after the
+and contract parity, tagged `design-v0.2.24`, and published only after the
 matching npm release completes. Do not edit generated files directly; changes
 must originate in the 12ui release source.

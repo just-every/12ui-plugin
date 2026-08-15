@@ -3117,6 +3117,15 @@ components:
             editor-created leaves omit it.
         box:
           $ref: '#/components/schemas/LayerBox'
+        labelBox:
+          $ref: '#/components/schemas/LayerBox'
+          description: >-
+            Optional declared placement of a control's own label inside box, in
+            the same canvas units. A control's box is its surface, so without
+            this a renderer can only centre the label; only controls
+            (button/input/badge) carry it, and only when extraction placed the
+            text. Absence renders exactly as documents published before the
+            field existed.
         canvasBackdrop:
           type: boolean
           const: true
