@@ -3233,7 +3233,7 @@ components:
         region2x:
           $ref: '#/components/schemas/LayerPixelArtifactRef'
         cutout:
-          $ref: '#/components/schemas/LayerPixelArtifactRef'
+          $ref: '#/components/schemas/LayerCutoutArtifactRef'
         crop:
           $ref: '#/components/schemas/LayerPixelArtifactRef'
     LayerArtifactRef:
@@ -3293,6 +3293,93 @@ components:
             provider-returned RGB image, or any producer that cannot prove the
             stronger claims. Absence means unknown: consumers must then behave
             exactly as they did before this field existed.
+        lineage:
+          type: string
+          enum: [prepared-source, provider-upscale, clean-output]
+          description: >-
+            Optional. Which PLANE this artifact's RGB descends from — a
+            different question from "pixels", which describes how the bytes were
+            made. A background remover handed the prepared source returns the
+            source's own scene with new alpha, and a paid upscale of a source
+            region is the same scene at 2x: both publish "cleaned" bytes and
+            both still carry every removed layer's ink. Derived from the route
+            the producer executed, never from inspecting pixels. Absence means
+            unknown.
+        carriesSourceContent:
+          type: boolean
+          description: >-
+            Optional. Whether these bytes still carry what the clean was paid to
+            remove, derived from "lineage" by the producer so no consumer
+            re-encodes the mapping. Published only alongside a known "lineage".
+            It is the CONTENT half of a suppression proof and not the whole of
+            one: a raster whose alpha was synthesized can carry content in RGB
+            and display none of it at a given overlap.
+    LayerCutoutArtifactRef:
+      type: object
+      additionalProperties: false
+      required: [artifactId, url, expiresAt]
+      properties:
+        artifactId: { type: string }
+        url:
+          type: string
+          format: uri
+          description: Signed HTTPS href, hydrated on every API response.
+        expiresAt: { type: string, format: date-time }
+        mediaType: { type: string }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        scale:
+          type: number
+          exclusiveMinimum: 0
+          description: >-
+            Artifact pixels per canvas pixel, measured from the artifact
+            dimensions against the box it covers (2 = retina master).
+        pixels:
+          type: string
+          enum: [source, matted, cleaned]
+          description: >-
+            Optional pixel provenance for these bytes. "source" is a proof: the
+            bytes are a lossless crop of the prepared source at the layer
+            geometry (or its pure 2x upscale). "matted" means the RGB channels
+            are unchanged source pixels and only alpha was synthesized.
+            "cleaned" means the pixels derive from a generative clean, a
+            provider-returned RGB image, or any producer that cannot prove the
+            stronger claims. Absence means unknown: consumers must then behave
+            exactly as they did before this field existed.
+        lineage:
+          type: string
+          enum: [prepared-source, provider-upscale, clean-output]
+          description: >-
+            Optional. Which PLANE this artifact's RGB descends from — a
+            different question from "pixels", which describes how the bytes were
+            made. A background remover handed the prepared source returns the
+            source's own scene with new alpha, and a paid upscale of a source
+            region is the same scene at 2x: both publish "cleaned" bytes and
+            both still carry every removed layer's ink. Derived from the route
+            the producer executed, never from inspecting pixels. Absence means
+            unknown.
+        carriesSourceContent:
+          type: boolean
+          description: >-
+            Optional. Whether these bytes still carry what the clean was paid to
+            remove, derived from "lineage" by the producer so no consumer
+            re-encodes the mapping. Published only alongside a known "lineage".
+            It is the CONTENT half of a suppression proof and not the whole of
+            one: a raster whose alpha was synthesized can carry content in RGB
+            and display none of it at a given overlap.
+        carriesLayerContent:
+          type: boolean
+          description: >-
+            Optional. Whether this cutout still paints the content its own
+            rectangular sibling ("region2x", else "crop") carries. Measured at
+            publication over the 8px tiles this cutout's alpha leaves fully
+            transparent: where the source carries local structure there and the
+            rectangle carries it too, the cutout drops content its own layer owns
+            and this reads false. A consumer that sees false paints the rectangle
+            instead, leaving the published slot priority otherwise unchanged.
+            Absence means unknown — an unmeasurable site, or a document published
+            before the field — and consumers must then behave exactly as they did
+            before it existed. Only the cutout slot carries it.
     LayerPlate2xRef:
       type: object
       additionalProperties: false
