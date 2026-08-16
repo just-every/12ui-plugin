@@ -1816,6 +1816,24 @@ components:
           description: Public-preview image requests must use `layerdoc`; authenticated callers may choose any output.
         model:
           $ref: '#/components/schemas/ConversionModel'
+        lane:
+          type: string
+          enum: [interactive, batch]
+          default: interactive
+          description: >-
+            Extraction dispatch lane. `interactive` (the default) is every
+            pre-existing minutes-scale lane. `batch` defers the paid
+            extraction to the OpenAI Batch API (24h completion window,
+            discounted batch pricing) for corpus-scale work; the response is
+            the ordinary async operation contract, polled for longer, and
+            batch runs carry their own artifact TTL. Accepted only for image
+            (`file`) input on the convert operation by an authenticated
+            account, and not accepted together with `export` or
+            `responsive_quality` — convert to `layerdoc` first, then derive
+            responsive HTML from the finished conversion. It participates in
+            request identity: the same bytes submitted interactively and via
+            batch are distinct idempotent operations. Full lane contract:
+            docs/convert-batch-lane.md.
         responsive_quality:
           $ref: '#/components/schemas/ResponsiveConversionQuality'
           description: >-

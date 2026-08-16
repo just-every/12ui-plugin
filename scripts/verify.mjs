@@ -3,7 +3,7 @@ import { lstat, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SKILLS = ['design', 'design-search', 'design-draft', 'design-branch', 'design-convert'];
+const SKILLS = ['design'];
 const DOCS = [
   'CONVERSION_PACKAGES.md',
   'EXPORT_FORMATS.md',

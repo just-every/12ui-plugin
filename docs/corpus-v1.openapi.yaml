@@ -6,8 +6,10 @@ info:
     Account and quota-limited public access to 12ui visual inspiration.
     Ranking is exposed only through the locked Direct, Balanced, and Adventurer
     modes plus the account-tier `seed` slate-variation control. Caller-selected
-    ranking weights, arms, filters, experiments, standalone search, similarity
-    search, and allocation-style retrieval are not part of this contract.
+    ranking weights, arms, filters, experiments, general standalone search,
+    similarity search, and allocation-style retrieval are not part of this
+    contract. The account-only logo endpoint is a narrow exception: it searches
+    only the release-sealed Logo Bar A allowlist after explicit logo intent.
 servers:
   - url: https://12ui.com
 tags:
@@ -101,6 +103,48 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+  /api/v1/corpus/logos/search:
+    post:
+      tags: [Corpus]
+      operationId: searchCorpusLogos
+      summary: Search the release-sealed Logo Bar A allowlist
+      description: |
+        Account-only, quota-metered retrieval over the exact eligible Logo Bar A
+        partition. Design Corpus validates explicit logo intent before embedding,
+        resolves the sealed allowlist before vector reads, and never searches held
+        rows. Idempotency, embedding reuse, reservation, exact-cost settlement,
+        daily quota, and prepaid-wallet overflow use the same durable contract as
+        corpus inspiration.
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LogoSearchRequest' }
+      responses:
+        '200':
+          description: Ranked eligible logo symbols with style and content relevance evidence.
+          headers:
+            x-ratelimit-limit: { $ref: '#/components/headers/RateLimitLimit' }
+            x-ratelimit-remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+            x-12ui-idempotent-replay: { $ref: '#/components/headers/IdempotentReplay' }
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+            x-design-corpus-logo-proof: { $ref: '#/components/headers/LogoServingProof' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LogoSearchResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429': { $ref: '#/components/responses/QueryRateLimited' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/v1/corpus/status:
     get:
       tags: [Corpus]
@@ -303,6 +347,9 @@ components:
       schema: { type: string }
     DesignCorpusVariant:
       schema: { type: string }
+    LogoServingProof:
+      description: SHA-256 fingerprint of the active release's sealed Logo Bar A serving proof.
+      schema: { type: string, pattern: '^[a-f0-9]{64}$' }
 
   schemas:
     InspirationMode:
@@ -338,6 +385,60 @@ components:
             The same (q, mode, k, seed) always returns the same slate.
         referenceImage:
           $ref: '#/components/schemas/ReferenceImage'
+
+    LogoSearchRequest:
+      type: object
+      additionalProperties: false
+      required: [q]
+      properties:
+        q:
+          type: string
+          minLength: 1
+          description: Account query, limited to 8,000 UTF-8 bytes; must carry explicit logo or brand-mark intent.
+        k:
+          type: integer
+          minimum: 1
+          maximum: 60
+          default: 12
+
+    LogoSearchResponse:
+      type: object
+      additionalProperties: false
+      required: [version, query, matchedTerms, requestedRole, k, eligibleCandidates, relevancePool, items]
+      properties:
+        version: { type: string, const: logo-bar-a-query-v1 }
+        query: { type: string }
+        matchedTerms:
+          type: array
+          items: { type: string }
+        requestedRole:
+          type: [string, 'null']
+          enum: [symbol, wordmark, combination, null]
+        k: { type: integer, minimum: 1, maximum: 60 }
+        eligibleCandidates: { type: integer, minimum: 0, maximum: 289 }
+        relevancePool: { type: integer, minimum: 0, maximum: 60 }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/LogoSearchItem' }
+
+    LogoSearchItem:
+      type: object
+      additionalProperties: false
+      required: [id, logoRole, markType, aspect, width, height, styleTags, description, styleSimilarity, contentSimilarity, relevance]
+      properties:
+        id: { type: string, pattern: '^logo-gen-[A-Za-z0-9._-]{1,120}$' }
+        logoRole: { type: string, enum: [symbol, wordmark, combination] }
+        markType: { type: [string, 'null'] }
+        aspect: { type: string, enum: [landscape, square, portrait] }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        styleTags:
+          type: array
+          items: { type: string }
+        description: { type: [string, 'null'] }
+        styleSimilarity: { type: number }
+        contentSimilarity: { type: number }
+        relevance: { type: number }
 
     ReferenceImage:
       type: object

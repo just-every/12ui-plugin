@@ -1,8 +1,0 @@
-interface:
-  display_name: "Design Draft"
-  short_description: "Draft candidate design directions from a brief with 12ui design draft"
-  icon_small: "./assets/small-400px.png"
-  icon_large: "./assets/large-logo.svg"
-  default_prompt: "Use $design-draft to draft four homepage directions."
-policy:
-  allow_implicit_invocation: true

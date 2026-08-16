@@ -1,8 +1,0 @@
-interface:
-  display_name: "Design Convert"
-  short_description: "Quickly turn any image into functioning code using 12ui design convert"
-  icon_small: "./assets/small-400px.png"
-  icon_large: "./assets/large-logo.svg"
-  default_prompt: "Use $design-convert to turn this screenshot our homepage."
-policy:
-  allow_implicit_invocation: true

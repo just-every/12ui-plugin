@@ -165,7 +165,7 @@ components:
       additionalProperties: false
       required: [concept, candidates]
       properties:
-        concept: { type: string, maxLength: 600 }
+        concept: { type: string, maxLength: 1200 }
         aspect:
           type: string
           enum: [landscape, portrait, square]
@@ -205,7 +205,7 @@ components:
       description: Exactly one of `winner` or `referenceImage` must be present.
       properties:
         source: { type: string, enum: [build] }
-        concept: { type: string, maxLength: 600 }
+        concept: { type: string, maxLength: 1200 }
         aspect:
           type: string
           enum: [landscape, portrait, square]
