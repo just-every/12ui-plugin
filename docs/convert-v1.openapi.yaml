@@ -3208,6 +3208,23 @@ components:
             such as text shadows and divider colors. This is never raw CSS.
         style:
           $ref: '#/components/schemas/LayerStyle'
+        groundInk:
+          type: string
+          enum: [erased, carried]
+          description: >-
+            Optional. What the raster GROUND below this leaf still displays of
+            this leaf's own ink, measured at publication from the prepared
+            source, the ground artifact bytes, and this leaf's declared box,
+            colour and content — never from a render and never from a model.
+            "carried" means the ground still paints these glyphs and the bytes
+            could not be erased provably: the leaf stays declared, with its
+            geometry and typography intact, but a renderer must NOT paint it, or
+            the string appears twice a few pixels apart. "erased" means the
+            ground artifact was deterministically edited to remove the baked
+            copy and the slot points at the new artifact, so the leaf paints
+            normally. Absence means the gate was silent or unmeasurable, and
+            consumers must then behave exactly as they did before this field
+            existed.
         artifacts:
           $ref: '#/components/schemas/LayerArtifacts'
     LayerStyle:

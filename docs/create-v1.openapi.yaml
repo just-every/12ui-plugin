@@ -28,8 +28,15 @@ paths:
         materializes the planned screens as pending candidates in slots a-h.
         The plan decides a source page (continuations below the approved
         screen, or none when it already ends) plus 1-4 further pages or
-        application routes of 1-2 screens each; a plan larger than the eight
-        available slots is trimmed deterministically from the trailing pages.
+        application routes of 1-2 screens each. The source page is ALWAYS
+        plan position 0 — with `slots: []` and `sourceEndsHere: true` when the
+        approved screen already ends — so a caller can always place that
+        approved design. A plan larger than the available slots is trimmed
+        deterministically from the trailing pages; `maxScreens` lowers that
+        cap from the eight-slot ceiling, is asked of the director, and is
+        enforced on parse. The cap shapes the plan and is NOT part of the run
+        identity, so a replay under the same Idempotency-Key that adds or
+        changes it replays the planned run rather than conflicting.
         Header, footer, and page-ending chrome are derived server-side from
         the surface type and each screen's position, never asked of the model.
         Build screens charge quota per dispatched slot rather than at claim.
@@ -210,6 +217,17 @@ components:
           type: string
           enum: [landscape, portrait, square]
           description: Defaults to the winning run's aspect, else landscape.
+        maxScreens:
+          type: integer
+          minimum: 1
+          maximum: 8
+          description: >
+            Total screens this branch may plan across the source
+            continuations and the further pages. Asked of the director and
+            enforced deterministically on parse, so every planned page keeps
+            at least one screen. Omitted means the eight-slot ceiling. Not
+            part of the run's identity: the same Idempotency-Key replays with
+            or without it.
         winner:
           type: object
           additionalProperties: false
@@ -243,8 +261,10 @@ components:
               index:
                 type: integer
                 description: >
-                  Plan position. 0 is always the source page; it is absent
-                  entirely when the approved screen already ends.
+                  Plan position. 0 is always the source page, present even
+                  when the approved screen already ends — then it carries
+                  `slots: []` and `sourceEndsHere: true`. Runs planned before
+                  2026-08-18 may start at index 1.
               kind: { type: string, enum: [source, additional] }
               title: { type: string }
               pageType:
