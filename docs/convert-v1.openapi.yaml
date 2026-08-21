@@ -24,7 +24,7 @@ x-12ui-public-preview:
     originRestricted: true
   workflow:
     source: image to LayerDoc
-    exports: [html, svg, png, jpg, webp, pdf, psd, pptx, sketch, web_project, app_project]
+    exports: [html, html_fixed, svg, png, jpg, webp, pdf, psd, pptx, sketch, web_project, app_project]
     note: The final hydrated LayerDoc is reused; exports never repeat image extraction.
   quotas:
     window: UTC day
@@ -83,7 +83,8 @@ paths:
         input/output pair. The hosted public preview must send both public
         preview headers. In that mode an image may produce only `layerdoc` and
         requires `cf-turnstile-response`; the resulting hydrated LayerDoc may
-        then produce `html`, `svg`, `png`, `jpg`, `webp`, `pdf`, `psd`, `pptx`, `sketch`,
+        then produce `html`, `html_fixed`, `svg`, `png`, `jpg`, `webp`, `pdf`,
+        `psd`, `pptx`, `sketch`,
         `web_project`, or `app_project` without a second image extraction.
         Project outputs require the multipart `profile` JSON field. Public
         preview image extraction may use `fast` or `standard`; `pro` requires
@@ -457,7 +458,9 @@ paths:
                 explode: true
       responses:
         '202':
-          description: Package accepted and processing.
+          description: >-
+            Package accepted and processing. A replay answers here only while
+            the package is still within its retention window.
           headers:
             Location: { schema: { type: string } }
             Retry-After: { schema: { type: integer, minimum: 1 } }
@@ -465,7 +468,14 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ConversionPackageOperation' }
         '200':
-          description: Idempotent replay of a completed package.
+          description: >-
+            Idempotent replay of a package that is no longer accepting work.
+            Admission reads the request's own clock, so a replay arriving after
+            the package's `expires_at` expires it first and answers here with
+            status `expired` rather than redriving it; the `error.detail` of
+            that answer names the spent Idempotency-Key and says a replacement
+            package needs a different one. A replay of a completed or terminally
+            failed package answers here unchanged.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ConversionPackageOperation' }
@@ -1597,6 +1607,20 @@ components:
           type: string
           enum: [unattached, pending, result_missing, expired]
           description: Present only when available is false.
+    ConversionPackageChildProgress:
+      type: object
+      additionalProperties: false
+      required: [stage, percent]
+      description: >-
+        How far one of a package's child conversions has got right now. The
+        package's own completed counts children that have LANDED, so a phase
+        whose children each take minutes reports 0 of N throughout; the children
+        publish their stage and percent durably and the package now passes them
+        on. stage GROWS as the pipeline gains stages — keep an unrecognised
+        value and render it generically rather than rejecting the payload.
+      properties:
+        stage: { type: string }
+        percent: { type: integer, minimum: 0, maximum: 100 }
     ConversionPackageOperation:
       type: object
       additionalProperties: false
@@ -1630,6 +1654,17 @@ components:
                 Children of the current phase converting right now. With
                 stage_since and updated_at this separates slow work from wedged
                 work while percent has not moved.
+            children_percent:
+              type: integer
+              minimum: 0
+              maximum: 100
+              description: >-
+                How far the current phase's children have got, combined, on
+                their own scale. percent is on the package's scale, where the
+                export phase occupies 75-95, and completed counts only children
+                that have landed; this is what separates three pages sitting at
+                30% from three that have not started. Absent while the phase has
+                no child run to read.
             stage_since:
               type: string
               format: date-time
@@ -1697,6 +1732,11 @@ components:
                   responsive package whose page export child exists; until
                   then the plan is genuinely undecided and is not echoed back
                   as though it were the answer.
+              progress:
+                $ref: '#/components/schemas/ConversionPackageChildProgress'
+                description: >-
+                  How far this page's own export child has got. Present only
+                  while that child is queued or running.
               viewports:
                 type: array
                 items:
@@ -1707,6 +1747,11 @@ components:
                     ordinal: { type: integer, minimum: 0 }
                     status: { type: string, enum: [queued, running, succeeded, failed] }
                     conversion_id: { type: string }
+                    progress:
+                      $ref: '#/components/schemas/ConversionPackageChildProgress'
+                      description: >-
+                        Present only while this viewport's child is queued or
+                        running.
         result:
           type: object
           required: [kind, media_type, pages, common_components, normalized_typography_fields]
@@ -2626,6 +2671,76 @@ components:
                 description: >-
                   Signed generated-reference PNG. Absent until generation and
                   durable artifact registration complete for this anchor.
+    ExtractionCallTelemetry:
+      type: object
+      additionalProperties: false
+      required:
+        - effect_id
+        - rung
+        - attempt
+        - provider
+        - model
+        - transport
+        - wall_ms
+        - input_tokens
+        - output_tokens
+        - finish_reason
+        - output_truncated
+      description: >-
+        Measurements copied from one durable extraction provider response and
+        its call wall. This record is observational and never changes which
+        extraction is accepted.
+      properties:
+        effect_id:
+          type: string
+          minLength: 1
+          description: Stable paid-effect identity for this extraction call.
+        rung:
+          type: string
+          enum: [primary, validation_reroll, acceptance_reroll, responsive]
+        attempt: { type: integer, minimum: 0 }
+        provider: { type: string, minLength: 1 }
+        model: { type: string, minLength: 1 }
+        transport: { type: [string, 'null'] }
+        wall_ms:
+          type: integer
+          minimum: 0
+          description: Wall-clock duration observed around the provider call.
+        input_tokens:
+          type: [integer, 'null']
+          minimum: 0
+          description: Provider-reported input tokens copied from priced usage.
+        output_tokens:
+          type: [integer, 'null']
+          minimum: 0
+          description: Provider-reported output tokens copied from priced usage.
+        finish_reason:
+          type: [string, 'null']
+          description: Provider completion or stop reason when one was reported.
+        output_truncated:
+          type: [boolean, 'null']
+          description: Whether provider completion evidence says the output was truncated; null means unknown.
+        response_canvas:
+          type: object
+          additionalProperties: false
+          required: [width, height]
+          description: Coordinate canvas requested from an image-backed structured response.
+          properties:
+            width: { type: integer, minimum: 1 }
+            height: { type: integer, minimum: 1 }
+    ExtractionTelemetry:
+      type: object
+      additionalProperties: false
+      required: [revision, calls]
+      description: >-
+        Per-call extraction measurements. Absent on legacy operations whose
+        durable provider envelopes predate this additive record.
+      properties:
+        revision: { type: string, const: extraction-telemetry-v1 }
+        calls:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/ExtractionCallTelemetry' }
     ConversionOperation:
       type: object
       additionalProperties: false
@@ -2670,6 +2785,8 @@ components:
           $ref: '#/components/schemas/ResponsiveConversionPlan'
         responsive_preview:
           $ref: '#/components/schemas/ResponsiveConversionPreview'
+        extraction_telemetry:
+          $ref: '#/components/schemas/ExtractionTelemetry'
         progressive_document:
           $ref: '#/components/schemas/ConversionProgressiveDocument'
         created_at: { type: string, format: date-time }

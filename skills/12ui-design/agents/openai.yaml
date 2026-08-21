@@ -1,0 +1,6 @@
+interface:
+  display_name: "12ui Design"
+  short_description: "Draft, branch, and convert polished interfaces"
+  default_prompt: "Use $12ui-design to create a new homepage for this project."
+policy:
+  allow_implicit_invocation: true

@@ -1,11 +1,12 @@
 {
   "name": "12ui-plugin",
-  "version": "0.2.27",
+  "version": "0.2.28",
   "private": true,
   "description": "Public 12ui design skills, Codex plugin, and API contracts",
   "license": "MIT",
   "repository": "https://github.com/just-every/12ui-plugin",
   "scripts": {
-    "test": "node scripts/verify.mjs ."
+    "test": "node scripts/verify.mjs .",
+    "package": "node scripts/package.mjs ."
   }
 }

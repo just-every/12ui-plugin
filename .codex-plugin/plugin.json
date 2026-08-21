@@ -1,6 +1,6 @@
 {
   "name": "12ui-design",
-  "version": "0.2.27",
+  "version": "0.2.28",
   "description": "Create distinctive interfaces with 12ui design skills and hosted design APIs.",
   "author": {
     "name": "Just Every",
@@ -21,13 +21,14 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "12ui Design",
-    "shortDescription": "Create and convert distinctive interface designs",
+    "shortDescription": "Design interfaces from images",
     "longDescription": "Search real design references, draft visual directions, expand an approved design into complete pages, and convert finished images into production-ready output.",
     "developerName": "Just Every",
-    "category": "Design",
+    "category": "Creativity",
     "capabilities": [
-      "Interactive",
-      "Write"
+      "Create interface designs",
+      "Search design references",
+      "Convert interface images to code"
     ],
     "websiteURL": "https://12ui.com/",
     "privacyPolicyURL": "https://12ui.com/privacy",
@@ -39,7 +40,6 @@
     ],
     "brandColor": "#0F172A",
     "composerIcon": "./assets/12ui-icon.png",
-    "logo": "./assets/12ui-logo.svg",
-    "screenshots": []
+    "logo": "./assets/12ui-icon.svg"
   }
 }

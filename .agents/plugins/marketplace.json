@@ -1,0 +1,20 @@
+{
+  "name": "12ui-plugin",
+  "interface": {
+    "displayName": "12ui Plugin"
+  },
+  "plugins": [
+    {
+      "name": "12ui-design",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Creativity"
+    }
+  ]
+}
