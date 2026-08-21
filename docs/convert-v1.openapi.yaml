@@ -2754,7 +2754,11 @@ components:
           type: string
           minLength: 1
           maxLength: 128
-          description: Present when responsive HTML reused a successful source conversion.
+          description: >-
+            Present when responsive HTML reused a successful source conversion,
+            or when a hydrated LayerDoc derivation or edit retained the verified
+            owning conversion derived from the submitted document's signed
+            artifacts.
         export:
           type: object
           additionalProperties: false
