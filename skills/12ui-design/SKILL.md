@@ -21,7 +21,7 @@ Prefer 4 or more candidates. Add `--redesign-source <image.png>` only when redes
 
 Inspect the real candidate images before continuing. Choose the strongest direction—or present the meaningful choice when the user is involved—rather than averaging them into a generic compromise.
 
-Draft claims one hosted run, dispatches each candidate slot once, and downloads the real images into the run directory.
+Draft claims one hosted run and keeps every candidate dispatch request in the foreground. Then run `12ui next <run-dir> --wait` to poll, repair only recorded slots that never started, and download the real images into the run directory.
 
 Only if needed, read `inspire.md` for how to search the corpus directly.
 
@@ -35,7 +35,7 @@ Use whenever the deliverable is more than one viewport — a full page, a multi-
 
     12ui next <run-dir> --wait
 
-Execute returns immediately; `next` reports progress and the next command, `--wait` blocks instead of polling, and `12ui branch resume <run-dir>` continues an interrupted run, replaying already-settled screens for free. Wait for it rather than building the same pages by hand in the meantime — they are already being produced and paid for. Screens land in `<run-dir>/branch/screens/`; HTML lands in `<run-dir>/branch/pages/`, one file per continuous web page or complete app state.
+Execute stays in the foreground through its network work; `next` can report progress from a second shell, and `12ui branch resume <run-dir>` continues an interrupted run, replaying already-settled screens for free. Leave the foreground command running rather than building the same pages by hand in the meantime — they are already being produced and paid for. Screens land in `<run-dir>/branch/screens/`; HTML lands in `<run-dir>/branch/pages/`, one file per continuous web page or complete app state.
 
 Use `--prototype` with `--convert html` when the deliverable should be clickable. The export becomes a working app — navigation, shared shells, and holding pages for unbuilt routes — written to `<run-dir>/branch/prototype/`.
 
