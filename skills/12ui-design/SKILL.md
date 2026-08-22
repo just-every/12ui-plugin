@@ -21,7 +21,7 @@ Prefer 4 or more candidates. Add `--redesign-source <image.png>` only when redes
 
 Inspect the real candidate images before continuing. Choose the strongest direction—or present the meaningful choice when the user is involved—rather than averaging them into a generic compromise.
 
-Draft claims one hosted run, dispatches each candidate slot once, and downloads the real images into the run directory. It needs 12ui authentication only; never ask the user for Codex login or an image-provider key.
+Draft claims one hosted run, dispatches each candidate slot once, and downloads the real images into the run directory.
 
 Only if needed, read `inspire.md` for how to search the corpus directly.
 
