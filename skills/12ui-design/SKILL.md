@@ -29,13 +29,19 @@ Only if needed, read `inspire.md` for how to search the corpus directly.
 
 Use whenever the deliverable is more than one viewport — a full page, a multi-route site, an app with several states — expand the approved design rather than re-deriving it per screen.
 
-    12ui branch execute --start <image.png> --scope page|site --convert html --concept "<what the rest of the surface must cover; 1200 chars max>"
+    12ui branch execute --start <image.png> --scope page|site --convert html --prototype --concept "<what the rest of the surface must cover; 1200 chars max>"
 
 `--scope page` grows that screen into the rest of its page and `--scope site` adds sibling routes and app states. With `--convert html`, ordered `web_page` viewports stay in one continuous page; complete `web_app`, `mobile_app`, and `immersive` states become separate pages so recurring application shells are never stacked into one long document.
 
     12ui next <run-dir> --wait
 
 Execute returns immediately; `next` reports progress and the next command, `--wait` blocks instead of polling, and `12ui branch resume <run-dir>` continues an interrupted run, replaying already-settled screens for free. Wait for it rather than building the same pages by hand in the meantime — they are already being produced and paid for. Screens land in `<run-dir>/branch/screens/`; HTML lands in `<run-dir>/branch/pages/`, one file per continuous web page or complete app state.
+
+Use `--prototype` with `--convert html` when the deliverable should be clickable. After export it canonically splits application states, preserves shared shells, derives navigation from the branch plan, adds content-backed holding pages for unbuilt routes, and writes a verified `<run-dir>/branch/prototype/`. It labels ambiguous controls through one cheap product call per exported screen, but deterministic link and form facts take precedence. Missing HTML or plan, legacy viewport ids, runtime failures, zero-action real pages, dropdowns with fewer than three distinct options after labeling, and more than 50% holdings stop publication. Any holding page, skipped shell transplant, shell size residual, or untested script direction remains a warning and measured fact in `proto-manifest.json`.
+
+For a completed branch that was exported without the flag, run:
+
+    12ui prototype <run-dir>
 
 ## 3. Convert
 
@@ -51,7 +57,7 @@ All but `html` are free, deterministic, and parallel; reusing a key replays fini
 
 ## 4. Integrate
 
-Avoid rebuilding from scratch because you will lose pixel precision. Instead extend the exported code with functional elements, interactions, shared headers and footers, routing, and application state. Open the integrated result and compare it with the source; fix visible drift rather than accepting a merely functional approximation.
+Avoid rebuilding from scratch because you will lose pixel precision. For a multi-screen HTML branch, use its generated prototype as the interaction and routing baseline before adding application-specific data and behavior. In `12ui review`, Prototype builds or rebuilds that artifact explicitly. Holding pages offer Fill this gap for a visible $0.51+ claim-and-convert operation; it never runs automatically. Open the integrated result, follow every transition, resize it, and compare it with the source; fix visible drift rather than accepting a merely functional approximation.
 
 ## 5. Search
 

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: 12ui Create API
-  version: 1.1.0
+  version: 1.2.0
   description: >
     The /create pipeline tool. A CREATE run turns a concept plus at most four
     single-reference candidates into gpt-image-2 (quality medium) interface
@@ -150,6 +150,50 @@ paths:
             image/png: {}
         '404': { description: No stored image for this slot. }
         '410': { description: Run expired. }
+  /api/v1/create/{runId}/prototype-labels/{labelKey}:
+    post:
+      summary: Label one exported screen's prototype interactions
+      description: >
+        Performs exactly one cheap gpt-5.6-luna structured-output call for one
+        screen. The caller supplies every candidate interaction and the valid
+        destinations; the response returns every candidate id exactly once
+        under the four-way navigate/dropdown/modal/none schema. The labelKey is
+        the SHA-256 of the normalized request and the matching
+        `prototype-label:{labelKey}` Idempotency-Key is required. A settled
+        request replays its durable action set without another provider call.
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema: { type: string, pattern: '^crt-[a-f0-9]{40}$' }
+        - in: path
+          name: labelKey
+          required: true
+          schema: { type: string, pattern: '^[a-f0-9]{64}$' }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, pattern: '^prototype-label:[a-f0-9]{64}$' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PrototypeLabelRequest' }
+      responses:
+        '200':
+          description: New or replayed durable interaction labels.
+          headers:
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrototypeLabelResponse' }
+        '400': { description: Invalid request or mismatched Idempotency-Key. }
+        '404': { description: Unknown run or another principal's run. }
+        '409': { description: Identity conflict or a concluded unusable effect. }
+        '410': { description: Run expired. }
+        '413': { description: Request exceeds 256 KiB. }
+        '429': { description: Sponsored budget exhausted. }
+        '502': { description: The one provider call returned no valid action set. }
 components:
   headers:
     FundingSource:
@@ -159,6 +203,88 @@ components:
         drawn from the sponsored pool.
       schema: { type: string, enum: [sponsored, wallet, admin] }
   schemas:
+    PrototypeDestination:
+      type: object
+      additionalProperties: false
+      required: [id, title, followOn]
+      properties:
+        id: { type: string, maxLength: 240 }
+        title: { type: string, maxLength: 240 }
+        followOn: { type: boolean }
+    PrototypeCandidate:
+      type: object
+      additionalProperties: false
+      required: [id, kind, text, inSharedChrome]
+      properties:
+        id: { type: string, maxLength: 240 }
+        kind: { type: string, enum: [button, link, nav, row, card, other] }
+        text: { type: string, maxLength: 500 }
+        inSharedChrome: { type: boolean }
+    PrototypeLabelRequest:
+      type: object
+      additionalProperties: false
+      required: [product, screen, destinations, holdingTargets, candidates]
+      properties:
+        product: { type: string, maxLength: 1200 }
+        screen:
+          type: object
+          additionalProperties: false
+          required: [id, title, purpose, content]
+          properties:
+            id: { type: string, maxLength: 240 }
+            title: { type: string, maxLength: 240 }
+            purpose: { type: string, maxLength: 1200 }
+            content: { type: string, maxLength: 4000 }
+        destinations:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/PrototypeDestination' }
+        holdingTargets:
+          type: array
+          maxItems: 200
+          items: { type: string, pattern: '^holding:', maxLength: 240 }
+        candidates:
+          type: array
+          minItems: 1
+          maxItems: 240
+          items: { $ref: '#/components/schemas/PrototypeCandidate' }
+    PrototypeAction:
+      type: object
+      additionalProperties: false
+      required: [id, action, target, options, modal]
+      properties:
+        id: { type: string }
+        action: { type: string, enum: [navigate, dropdown, modal, none] }
+        target: { type: [string, 'null'] }
+        options:
+          oneOf:
+            - { type: 'null' }
+            - type: array
+              minItems: 3
+              maxItems: 6
+              items: { type: string }
+        modal:
+          oneOf:
+            - { type: 'null' }
+            - type: object
+              additionalProperties: false
+              required: [title, body, confirm]
+              properties:
+                title: { type: string }
+                body: { type: string }
+                confirm: { type: string }
+    PrototypeLabelResponse:
+      type: object
+      additionalProperties: false
+      required: [actions, model, providerRequestId, costMicros, replayed]
+      properties:
+        actions:
+          type: array
+          items: { $ref: '#/components/schemas/PrototypeAction' }
+        model: { type: string, enum: [gpt-5.6-luna] }
+        providerRequestId: { type: [string, 'null'] }
+        costMicros: { type: integer, minimum: 0 }
+        replayed: { type: boolean }
     ReferenceImage:
       type: object
       additionalProperties: false
