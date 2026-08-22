@@ -28,7 +28,8 @@ const ROOT_FILES = [
 ];
 
 const ASSET_SHA256 = {
-  '12ui-icon.png': '6d5eb49160bef49d7aba4755195634f0f7f4eeeaecf50e19397a75d8c258913b',
+  '12ui-icon.png': '2c0c41cd3c37933f359c0ebb93ffacd229ebc51175b028f712d64a26dfeb83d1',
+  '12ui-icon-dark.png': '9f18a86ec1812f4804f85bea3179c9d073cf7cf9298f04371e3d1da8303952b3',
   '12ui-icon.svg': '4d61e1cbcbd2935963df3b477a0997e01462cf197ae3055e088d01e86162f0b7',
 };
 
@@ -183,10 +184,12 @@ export async function verifyPublicPlugin(rootDirectory) {
     assert.equal(bytes.readUInt32BE(16), SCREENSHOT_DIMENSIONS[name][0]);
     assert.equal(bytes.readUInt32BE(20), SCREENSHOT_DIMENSIONS[name][1]);
   }
-  const png = await readAsset('12ui-icon.png');
-  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-  assert.equal(png.readUInt32BE(16), 512);
-  assert.equal(png.readUInt32BE(20), 512);
+  for (const iconName of ['12ui-icon.png', '12ui-icon-dark.png']) {
+    const png = await readAsset(iconName);
+    assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    assert.equal(png.readUInt32BE(16), 512);
+    assert.equal(png.readUInt32BE(20), 512);
+  }
   const svg = (await readAsset('12ui-icon.svg')).toString('utf8');
   assert.match(svg, /<svg\b[^>]*\bviewBox="0 0 610 610"/u);
 
