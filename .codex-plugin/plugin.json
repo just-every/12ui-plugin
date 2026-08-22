@@ -40,6 +40,12 @@
     ],
     "brandColor": "#0F172A",
     "composerIcon": "./assets/12ui-icon.png",
-    "logo": "./assets/12ui-icon.svg"
+    "logo": "./assets/12ui-icon.svg",
+    "screenshots": [
+      "./assets/screenshots/screenshot-1.png",
+      "./assets/screenshots/screenshot-2.png",
+      "./assets/screenshots/screenshot-3.png",
+      "./assets/screenshots/screenshot-4.png"
+    ]
   }
 }

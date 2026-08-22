@@ -1,0 +1,22 @@
+{
+  "name": "12ui-design",
+  "displayName": "12ui Design",
+  "version": "0.2.31",
+  "description": "Create distinctive interfaces with 12ui design skills and hosted design APIs.",
+  "author": {
+    "name": "Just Every",
+    "email": "support@12ui.com",
+    "url": "https://12ui.com/"
+  },
+  "homepage": "https://12ui.com/skill",
+  "repository": "https://github.com/just-every/12ui-plugin",
+  "license": "MIT",
+  "keywords": [
+    "12ui",
+    "design",
+    "ui-generation",
+    "image-to-code",
+    "agent-skills"
+  ],
+  "skills": "./skills/"
+}

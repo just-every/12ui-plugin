@@ -14,6 +14,7 @@ const DOCS = [
 ];
 const ROOT_FILES = [
   '.agents',
+  '.claude-plugin',
   '.codex-plugin',
   '.gitignore',
   'LICENSE',
@@ -29,6 +30,14 @@ const ROOT_FILES = [
 const ASSET_SHA256 = {
   '12ui-icon.png': '6d5eb49160bef49d7aba4755195634f0f7f4eeeaecf50e19397a75d8c258913b',
   '12ui-icon.svg': '4d61e1cbcbd2935963df3b477a0997e01462cf197ae3055e088d01e86162f0b7',
+};
+
+// Owner-selected directory screenshots, 2026-08-22. 1600x1000 PNG each.
+const SCREENSHOT_SHA256 = {
+  'screenshot-1.png': '823fff2424983e53be9b2f7b5b61074b547f266c4ff08ca2b50e116c933dfcb4',
+  'screenshot-2.png': '6db70bb2129383060df48b02a70f0823649b71d873f3f7a2186c67f3709d41ae',
+  'screenshot-3.png': 'db8decda0f225c1f94712ddfa7bf396e0c8562937f3bad0d3cc0b9e186177db0',
+  'screenshot-4.png': '01184ceecd9c7216520ee286a068357e46bb5c84e1cbb04ee910fa1cea26c6f5',
 };
 
 const CATEGORIES = new Set([
@@ -58,10 +67,18 @@ export async function verifyPublicPlugin(rootDirectory) {
   const root = path.resolve(rootDirectory);
   const rootEntries = (await readdir(root)).filter((name) => name !== '.git');
   assert.deepEqual(sorted(rootEntries), ROOT_FILES);
+  assert.deepEqual(await readdir(path.join(root, '.claude-plugin')), ['plugin.json']);
   assert.deepEqual(await readdir(path.join(root, '.codex-plugin')), ['plugin.json']);
   assert.deepEqual(await readdir(path.join(root, '.agents')), ['plugins']);
   assert.deepEqual(await readdir(path.join(root, '.agents', 'plugins')), ['marketplace.json']);
-  assert.deepEqual(sorted(await readdir(path.join(root, 'assets'))), sorted(Object.keys(ASSET_SHA256)));
+  assert.deepEqual(
+    sorted(await readdir(path.join(root, 'assets'))),
+    sorted([...Object.keys(ASSET_SHA256), 'screenshots']),
+  );
+  assert.deepEqual(
+    sorted(await readdir(path.join(root, 'assets', 'screenshots'))),
+    sorted(Object.keys(SCREENSHOT_SHA256)),
+  );
   assert.deepEqual(sorted(await readdir(path.join(root, 'docs'))), DOCS);
   assert.deepEqual(sorted(await readdir(path.join(root, 'skills'))), sorted(SKILLS));
 
@@ -119,7 +136,19 @@ export async function verifyPublicPlugin(rootDirectory) {
   assert.equal(plugin.interface.brandColor, '#0F172A');
   assert.equal(plugin.interface.composerIcon, './assets/12ui-icon.png');
   assert.equal(plugin.interface.logo, './assets/12ui-icon.svg');
-  assert.equal(plugin.interface.screenshots, undefined);
+  assert.deepEqual(
+    plugin.interface.screenshots,
+    Object.keys(SCREENSHOT_SHA256).sort().map((name) => `./assets/screenshots/${name}`),
+  );
+
+  const claude = JSON.parse(await readFile(path.join(root, '.claude-plugin/plugin.json'), 'utf8'));
+  assert.equal(claude.name, '12ui-design');
+  assert.equal(claude.displayName, '12ui Design');
+  assert.equal(claude.version, packageManifest.version);
+  assert.equal(claude.skills, './skills/');
+  assert.equal(claude.repository, 'https://github.com/just-every/12ui-plugin');
+  assert.equal(claude.interface, undefined);
+  assert.equal(claude.keywords.includes('codex'), false);
 
   assert.deepEqual(marketplace, {
     name: '12ui-plugin',
@@ -138,6 +167,14 @@ export async function verifyPublicPlugin(rootDirectory) {
     assert.equal(createHash('sha256').update(bytes).digest('hex'), ASSET_SHA256[name]);
     return bytes;
   };
+  for (const [name, digest] of Object.entries(SCREENSHOT_SHA256)) {
+    const bytes = await readFile(path.join(root, 'assets', 'screenshots', name));
+    assert.ok(bytes.byteLength <= 5 * 1024 * 1024);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), digest);
+    assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    assert.equal(bytes.readUInt32BE(16), 1600);
+    assert.equal(bytes.readUInt32BE(20), 1000);
+  }
   const png = await readAsset('12ui-icon.png');
   assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
   assert.equal(png.readUInt32BE(16), 512);
