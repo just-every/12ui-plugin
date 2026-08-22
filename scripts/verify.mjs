@@ -28,8 +28,10 @@ const ROOT_FILES = [
 ];
 
 const ASSET_SHA256 = {
-  '12ui-icon.png': '2c0c41cd3c37933f359c0ebb93ffacd229ebc51175b028f712d64a26dfeb83d1',
-  '12ui-icon-dark.png': '9f18a86ec1812f4804f85bea3179c9d073cf7cf9298f04371e3d1da8303952b3',
+  '12ui-icon.png': 'f029b27b26f732d78414f5095bcfa3b3397f73dbe1d1b2ff185530a21ec36627',
+  '12ui-icon-dark.png': '2885defa809b2fcfd51c026e71516ef32a04d003521e5b0bc95571878a4bacc5',
+  '12ui-icon-composer.png': 'c59304135043eb5601129ed1c7a104ff465138e2f0c8a57901a0f3aad1a4626c',
+  '12ui-icon-composer-dark.png': '231de1fdecbee642b1395db8e37ba8c6ab25cc67567fd7675c8d5a298fe7cdf6',
   '12ui-icon.svg': '4d61e1cbcbd2935963df3b477a0997e01462cf197ae3055e088d01e86162f0b7',
 };
 
@@ -143,7 +145,7 @@ export async function verifyPublicPlugin(rootDirectory) {
   }
   assert.match(plugin.interface.brandColor, /^#[0-9A-Fa-f]{6}$/u);
   assert.equal(plugin.interface.brandColor, '#0F172A');
-  assert.equal(plugin.interface.composerIcon, './assets/12ui-icon.png');
+  assert.equal(plugin.interface.composerIcon, './assets/12ui-icon-composer.png');
   assert.equal(plugin.interface.logo, './assets/12ui-icon.svg');
   assert.deepEqual(
     plugin.interface.screenshots,
@@ -184,11 +186,17 @@ export async function verifyPublicPlugin(rootDirectory) {
     assert.equal(bytes.readUInt32BE(16), SCREENSHOT_DIMENSIONS[name][0]);
     assert.equal(bytes.readUInt32BE(20), SCREENSHOT_DIMENSIONS[name][1]);
   }
-  for (const iconName of ['12ui-icon.png', '12ui-icon-dark.png']) {
+  const ICON_SIZES = {
+    '12ui-icon.png': 512,
+    '12ui-icon-dark.png': 512,
+    '12ui-icon-composer.png': 96,
+    '12ui-icon-composer-dark.png': 96,
+  };
+  for (const [iconName, side] of Object.entries(ICON_SIZES)) {
     const png = await readAsset(iconName);
     assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-    assert.equal(png.readUInt32BE(16), 512);
-    assert.equal(png.readUInt32BE(20), 512);
+    assert.equal(png.readUInt32BE(16), side);
+    assert.equal(png.readUInt32BE(20), side);
   }
   const svg = (await readAsset('12ui-icon.svg')).toString('utf8');
   assert.match(svg, /<svg\b[^>]*\bviewBox="0 0 610 610"/u);

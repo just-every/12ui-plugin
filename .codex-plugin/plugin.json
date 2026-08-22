@@ -39,7 +39,7 @@
       "Turn this finished design image into production code."
     ],
     "brandColor": "#0F172A",
-    "composerIcon": "./assets/12ui-icon.png",
+    "composerIcon": "./assets/12ui-icon-composer.png",
     "logo": "./assets/12ui-icon.svg",
     "screenshots": [
       "./assets/screenshots/screenshot-1.png",
