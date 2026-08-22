@@ -35,7 +35,7 @@ const ASSET_SHA256 = {
 // Owner-selected directory screenshots, 2026-08-22. 1600x1000 PNG each.
 const SCREENSHOT_SHA256 = {
   'screenshot-1.png': 'ee05cfc8cd2fa325b29b8b83e65c63f38c92e5a7d86d44ec453b4e1cf1c462c4',
-  'screenshot-2.png': 'b0a42ad54d8cb7a351714ca6551ebe78233b87cf0320bf28ff7c35171016d543',
+  'screenshot-2.png': 'c4fb462bbd0d8cbd74068b3b8309b7ad847bd5c2f2878d3c85f490b953831fdf',
   'screenshot-3.png': '5650a063066f6c3129afc87b09ef01782317e1999793ea426bf9609839eb18b3',
   'screenshot-4.png': 'd84584b1f3a90aeb81d44849300e3a740623b88865d6264e9fd800b800a6127e',
 };
