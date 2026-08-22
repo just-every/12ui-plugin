@@ -77,7 +77,11 @@ const protocolNames = [
 export async function verifyPublicPlugin(rootDirectory) {
   const root = path.resolve(rootDirectory);
   const rootEntries = (await readdir(root)).filter((name) => name !== '.git');
-  assert.deepEqual(sorted(rootEntries), ROOT_FILES);
+  const hasAppManifest = rootEntries.includes('.app.json');
+  assert.deepEqual(sorted(rootEntries), sorted([
+    ...ROOT_FILES,
+    ...(hasAppManifest ? ['.app.json'] : []),
+  ]));
   assert.deepEqual(await readdir(path.join(root, '.claude-plugin')), ['plugin.json']);
   assert.deepEqual(await readdir(path.join(root, '.codex-plugin')), ['plugin.json']);
   assert.deepEqual(await readdir(path.join(root, '.agents')), ['plugins']);
@@ -110,7 +114,16 @@ export async function verifyPublicPlugin(rootDirectory) {
   assert.equal(plugin.repository, 'https://github.com/just-every/12ui-plugin');
   assert.equal(plugin.skills, './skills/');
   assert.equal(plugin.mcpServers, undefined);
-  assert.equal(plugin.apps, undefined);
+  if (hasAppManifest) {
+    assert.equal(plugin.apps, './.app.json');
+    const appManifest = JSON.parse(await readFile(path.join(root, '.app.json'), 'utf8'));
+    assert.deepEqual(Object.keys(appManifest), ['apps']);
+    assert.deepEqual(Object.keys(appManifest.apps), ['12ui']);
+    assert.match(appManifest.apps['12ui'].id, /^plugin_asdk_app_[A-Za-z0-9_-]+$/u);
+  } else {
+    // The production ID is added only after the separately gated registration.
+    assert.equal(plugin.apps, undefined);
+  }
   assert.equal(plugin.interface.developerName, 'Just Every');
   assert.equal(plugin.interface.displayName, '12ui Design');
   assert.ok(plugin.interface.displayName.length <= 30);
@@ -158,6 +171,7 @@ export async function verifyPublicPlugin(rootDirectory) {
   assert.equal(claude.version, packageManifest.version);
   assert.equal(claude.skills, './skills/');
   assert.equal(claude.repository, 'https://github.com/just-every/12ui-plugin');
+  assert.equal(claude.apps, undefined);
   assert.equal(claude.interface, undefined);
   assert.equal(claude.keywords.includes('codex'), false);
 
