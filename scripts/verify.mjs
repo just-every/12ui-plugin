@@ -34,10 +34,18 @@ const ASSET_SHA256 = {
 
 // Owner-selected directory screenshots, 2026-08-22. 1600x1000 PNG each.
 const SCREENSHOT_SHA256 = {
-  'screenshot-1.png': '823fff2424983e53be9b2f7b5b61074b547f266c4ff08ca2b50e116c933dfcb4',
-  'screenshot-2.png': '6db70bb2129383060df48b02a70f0823649b71d873f3f7a2186c67f3709d41ae',
-  'screenshot-3.png': 'db8decda0f225c1f94712ddfa7bf396e0c8562937f3bad0d3cc0b9e186177db0',
-  'screenshot-4.png': '01184ceecd9c7216520ee286a068357e46bb5c84e1cbb04ee910fa1cea26c6f5',
+  'screenshot-1.png': 'ee05cfc8cd2fa325b29b8b83e65c63f38c92e5a7d86d44ec453b4e1cf1c462c4',
+  'screenshot-2.png': 'b0a42ad54d8cb7a351714ca6551ebe78233b87cf0320bf28ff7c35171016d543',
+  'screenshot-3.png': '5650a063066f6c3129afc87b09ef01782317e1999793ea426bf9609839eb18b3',
+  'screenshot-4.png': 'd84584b1f3a90aeb81d44849300e3a740623b88865d6264e9fd800b800a6127e',
+};
+
+// Retina-resolution directory screenshots; the grid is scaled to stay under the 5MB asset cap.
+const SCREENSHOT_DIMENSIONS = {
+  'screenshot-1.png': [2880, 1800],
+  'screenshot-2.png': [3200, 2000],
+  'screenshot-3.png': [3200, 2000],
+  'screenshot-4.png': [3200, 2000],
 };
 
 const CATEGORIES = new Set([
@@ -172,8 +180,8 @@ export async function verifyPublicPlugin(rootDirectory) {
     assert.ok(bytes.byteLength <= 5 * 1024 * 1024);
     assert.equal(createHash('sha256').update(bytes).digest('hex'), digest);
     assert.deepEqual([...bytes.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-    assert.equal(bytes.readUInt32BE(16), 1600);
-    assert.equal(bytes.readUInt32BE(20), 1000);
+    assert.equal(bytes.readUInt32BE(16), SCREENSHOT_DIMENSIONS[name][0]);
+    assert.equal(bytes.readUInt32BE(20), SCREENSHOT_DIMENSIONS[name][1]);
   }
   const png = await readAsset('12ui-icon.png');
   assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
