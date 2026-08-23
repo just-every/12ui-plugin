@@ -17,7 +17,7 @@ The draft command uses the best reference concepts from a large design corpus as
 
     12ui draft --concept "<product, audience, surface, goal, personality; 1200 chars max>" --candidates 4
 
-Prefer 4 or more candidates. Add `--redesign-source <image.png>` only when redesigning an existing interface which you need to preserve elements from.
+Prefer 4 or more candidates. Add `--reference <path-or-url>` to carry an existing interface's style into a new page; it retains style and excludes layout, content, and assets by default. Use `--retain layout` only when source geometry should be preserved.
 
 Inspect the real candidate images before continuing. Choose the strongest direction—or present the meaningful choice when the user is involved—rather than averaging them into a generic compromise.
 
