@@ -1396,6 +1396,8 @@ components:
       required: [version, output, pages]
       properties:
         version: { type: integer, const: 1 }
+        branch_attempt:
+          $ref: '#/components/schemas/ConversionPackageBranchAttemptV1'
         source:
           type: object
           additionalProperties: false
@@ -1522,6 +1524,26 @@ components:
       properties:
         layer: { type: integer, minimum: 0 }
         target_page_id: { type: string, minLength: 1, maxLength: 160 }
+    ConversionPackageBranchAttemptV1:
+      type: object
+      additionalProperties: false
+      required: [version, workflow_revision, logical_run_id, logical_page_id, generation]
+      description: >-
+        Immutable logical branch-page attempt identity. Generation zero omits
+        all recovery and target fields. A positive generation requires all five
+        recovery/target fields and is admitted only when they exactly match the
+        deployed pipeline and package interpreter contracts.
+      properties:
+        version: { type: integer, const: 1 }
+        workflow_revision: { type: string, minLength: 1, maxLength: 80 }
+        logical_run_id: { type: string, minLength: 1, maxLength: 160 }
+        logical_page_id: { type: string, minLength: 1, maxLength: 160 }
+        generation: { type: integer, minimum: 0, maximum: 8 }
+        recovery_of_package_id: { type: string, minLength: 1, maxLength: 160 }
+        target_pipeline_revision: { type: string, minLength: 1, maxLength: 160 }
+        target_pipeline_resume_contract: { type: string, minLength: 1, maxLength: 160 }
+        target_package_policy_revision: { type: string, minLength: 1, maxLength: 160 }
+        target_package_resume_contract: { type: string, minLength: 1, maxLength: 160 }
     ConversionPackageSiteV1:
       type: object
       additionalProperties: false
@@ -1659,6 +1681,14 @@ components:
         updated_at: { type: string, format: date-time }
         expires_at: { type: string, format: date-time }
         request_id: { type: string }
+        package_policy_revision:
+          type: string
+          description: Package interpreter policy stamped at admission.
+        package_resume_contract:
+          type: string
+          description: Durable package interpreter contract stamped at admission.
+        branch_attempt:
+          $ref: '#/components/schemas/ConversionPackageBranchAttemptV1'
         progress:
           type: object
           required: [stage, percent, completed, total, running, pages_available]
@@ -2990,12 +3020,31 @@ components:
             - conversion_parked
             - provider_unavailable
             - local_worker_restarted
+            - pipeline_revision_incompatible
             - service_unavailable
         detail: { type: string }
         request_id: { type: string }
         conversion_id: { type: string }
         stage: { type: string }
         retryable: { type: boolean }
+        revision_boundary:
+          $ref: '#/components/schemas/ConversionRevisionBoundary'
+    ConversionRevisionBoundary:
+      type: object
+      additionalProperties: false
+      required: [kind, current_pipeline_revision, current_pipeline_resume_contract]
+      properties:
+        kind:
+          type: string
+          enum: [pipeline, package]
+        admitted_pipeline_revision: { type: string }
+        admitted_pipeline_resume_contract: { type: string }
+        current_pipeline_revision: { type: string }
+        current_pipeline_resume_contract: { type: string }
+        admitted_package_policy_revision: { type: string }
+        admitted_package_resume_contract: { type: string }
+        current_package_policy_revision: { type: string }
+        current_package_resume_contract: { type: string }
     ConversionArtifact:
       type: object
       additionalProperties: false
