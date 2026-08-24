@@ -403,7 +403,9 @@ components:
         aspect:
           type: string
           enum: [landscape, portrait, square]
-          description: Defaults to the winning run's aspect, else landscape.
+          description: >
+            Explicitly declares this canvas for every generated slot. When
+            omitted, each slot inherits the approved winner's declared canvas.
         maxScreens:
           type: integer
           minimum: 1
@@ -439,6 +441,15 @@ components:
         approvedScreenSummary:
           type: string
           description: What the approved design already says (context to subtract).
+        winnerCanvas:
+          type: object
+          description: >
+            Native declared dimensions of the approved winner. Present on new
+            build runs; absent on legacy records.
+          required: [width, height]
+          properties:
+            width: { type: integer, minimum: 1 }
+            height: { type: integer, minimum: 1 }
         pages:
           type: array
           items:
@@ -525,6 +536,22 @@ components:
         content:
           type: string
           description: Build screens only. The plan's semantic direction for this screen.
+        canvasDecision:
+          type: object
+          description: >
+            Build screens only. Records whether request geometry inherited the
+            approved winner or came from an explicit declaration for this slot.
+          required: [provenance, sourceCanvas]
+          properties:
+            provenance:
+              type: string
+              enum: [inherited-from-winner, slot-declared]
+            sourceCanvas:
+              type: object
+              required: [width, height]
+              properties:
+                width: { type: integer, minimum: 1 }
+                height: { type: integer, minimum: 1 }
     RunEnvelope:
       type: object
       required: [id, concept, aspect, mode, retain, source, createdAt, expiresAt, candidates]

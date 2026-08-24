@@ -3235,6 +3235,15 @@ components:
             height: { type: integer, minimum: 1, maximum: 10000 }
         source:
           $ref: '#/components/schemas/LayerSourceArtifactRef'
+        layoutRelations:
+          type: array
+          description: >-
+            Optional source-declared layout facts carried with the document.
+            Consumers apply a relation only when every member and evidence
+            field is complete and current; malformed, stale, partial, or
+            contradictory relations are inert.
+          items:
+            $ref: '#/components/schemas/SharedLeftRailRelation'
         layers:
           type: array
           description: >-
@@ -3244,6 +3253,52 @@ components:
             interleave).
           items:
             $ref: '#/components/schemas/LayerNode'
+    SharedLeftRailRelation:
+      type: object
+      additionalProperties: false
+      required:
+        - relationId
+        - relationKind
+        - memberExtractionIndices
+        - role
+        - container
+        - target
+        - writingDirection
+        - sourceProvenance
+        - measurementRevision
+        - evidenceId
+      properties:
+        relationId: { type: string, minLength: 1, maxLength: 4096 }
+        relationKind: { type: string, const: shared-left-rail }
+        memberExtractionIndices:
+          type: array
+          minItems: 3
+          maxItems: 2000
+          uniqueItems: true
+          items: { type: integer, minimum: 0 }
+        role:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: Exact normalized extraction role shared by every member.
+        container:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: Exact normalized extraction group shared by every member.
+        target:
+          type: object
+          additionalProperties: false
+          required: [coordinateSpace, x]
+          properties:
+            coordinateSpace:
+              type: string
+              enum: [prepared-source, source]
+            x: { type: number, minimum: 0 }
+        writingDirection: { type: string, const: ltr }
+        sourceProvenance: { type: string, const: declared-extraction-boxes }
+        measurementRevision: { type: string, minLength: 1, maxLength: 4096 }
+        evidenceId: { type: string, minLength: 1, maxLength: 4096 }
     LayerNode:
       description: >-
         Group nodes are the only nodes carrying `children` — discriminate on
