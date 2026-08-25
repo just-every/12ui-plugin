@@ -158,9 +158,12 @@ paths:
         screen. The caller supplies every candidate interaction and the valid
         destinations; the response returns every candidate id exactly once
         under the four-way navigate/dropdown/modal/none schema. The labelKey is
-        the SHA-256 of the normalized request and the matching
-        `prototype-label:{labelKey}` Idempotency-Key is required. A settled
-        request replays its durable action set without another provider call.
+        the SHA-256 of the normalized request. Current clients send a
+        `prototype-label-attempt:{attemptKey}` Idempotency-Key derived from the
+        prototype input digest and durable local attempt number, plus those two
+        values in X-12ui-Prototype-* headers. Usable action sets remain keyed by
+        labelKey and always replay without another provider call; a settled
+        attempt with no usable set does not poison a new attempt or input.
       parameters:
         - in: path
           name: runId
@@ -173,7 +176,19 @@ paths:
         - in: header
           name: Idempotency-Key
           required: true
-          schema: { type: string, pattern: '^prototype-label:[a-f0-9]{64}$' }
+          schema:
+            type: string
+            pattern: '^prototype-label(?:-attempt)?:[a-f0-9]{64}$'
+        - in: header
+          name: X-12ui-Prototype-Input-Digest
+          required: false
+          description: Required with a prototype-label-attempt identity.
+          schema: { type: string, pattern: '^[a-f0-9]{64}$' }
+        - in: header
+          name: X-12ui-Prototype-Attempt
+          required: false
+          description: Durable local attempt generation; required with a prototype-label-attempt identity.
+          schema: { type: integer, minimum: 1 }
       requestBody:
         required: true
         content:
@@ -189,7 +204,7 @@ paths:
               schema: { $ref: '#/components/schemas/PrototypeLabelResponse' }
         '400': { description: Invalid request or mismatched Idempotency-Key. }
         '404': { description: Unknown run or another principal's run. }
-        '409': { description: Identity conflict or a concluded unusable effect. }
+        '409': { description: Identity conflict or this exact attempt concluded unusably. }
         '410': { description: Run expired. }
         '413': { description: Request exceeds 256 KiB. }
         '429': { description: Sponsored budget exhausted. }
