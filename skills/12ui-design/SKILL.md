@@ -39,9 +39,13 @@ Execute stays in the foreground through its network work; `next` can report prog
 
 Use `--prototype` with `--convert html` when the deliverable should be clickable. The export becomes a working app — navigation, shared shells, and holding pages for unbuilt routes — written to `<run-dir>/branch/prototype/`.
 
+Add `--polish` only when the user wants the opt-in production-feel pass. It runs the retained deterministic, harm-guarded rules after build, records every rule as fired, silent, or reverted, and runs the prototype runtime gates on that polished output.
+
 For a completed branch that was exported without the flag, run:
 
     12ui prototype <run-dir>
+
+The same opt-in is available here as `12ui prototype <run-dir> --polish`.
 
 ## 3. Convert
 
