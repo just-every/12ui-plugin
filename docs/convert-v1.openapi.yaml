@@ -1433,6 +1433,18 @@ components:
           description: >-
             Optional responsive HTML quality for every composed page child.
             The quality participates in package and child request identity.
+        pinned_assets:
+          type: array
+          minItems: 1
+          maxItems: 4
+          description: >-
+            Exact caller-owned pixels whose semantic owner the extraction model
+            must declare by its own layer ordinal, or explicitly declare
+            unplaced. Bytes, digest, and intrinsic dimensions are validated at
+            admission and participate in package and child request identity.
+            Placement never uses coordinate or lookalike matching.
+          items:
+            $ref: '#/components/schemas/ConversionPinnedAssetInput'
         breakpoints:
           type: array
           minItems: 1
@@ -1517,6 +1529,24 @@ components:
           maxItems: 64
           items:
             $ref: '#/components/schemas/ConversionPackageViewportInput'
+    ConversionPinnedAssetInput:
+      type: object
+      additionalProperties: false
+      required: [label, semanticKind, data, mediaType, sha256, width, height]
+      properties:
+        label: { type: string, minLength: 1, maxLength: 80 }
+        semanticKind: { type: string, const: logo }
+        data:
+          type: string
+          format: byte
+          maxLength: 2796204
+          description: Canonical base64 of at most 2 MiB of exact asset bytes.
+        mediaType:
+          type: string
+          enum: [image/png, image/jpeg, image/webp, image/svg+xml]
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        width: { type: integer, minimum: 1, maximum: 16384 }
+        height: { type: integer, minimum: 1, maximum: 16384 }
     ConversionPackagePageNavigation:
       type: object
       additionalProperties: false
@@ -1760,6 +1790,12 @@ components:
                   partial is a fetchable structurally whole prefix of a source
                   page. It never means the requested page completed.
               conversion_id: { type: string }
+              pinnedAssetUnplaced:
+                type: boolean
+                enum: [true]
+                description: >-
+                  At least one supplied pinned asset had no declared owner in
+                  any child screen composing this page.
               href: { type: string, format: uri }
               media_type: { type: string }
               available:
@@ -1821,6 +1857,12 @@ components:
                     ordinal: { type: integer, minimum: 0 }
                     status: { type: string, enum: [queued, running, succeeded, failed] }
                     conversion_id: { type: string }
+                    pinnedAssetUnplaced:
+                      type: boolean
+                      enum: [true]
+                      description: >-
+                        The child completed without placing at least one pinned
+                        asset after a null or invalid semantic declaration.
                     progress:
                       $ref: '#/components/schemas/ConversionPackageChildProgress'
                       description: >-
@@ -2871,6 +2913,12 @@ components:
         updated_at: { type: string, format: date-time }
         expires_at: { type: string, format: date-time }
         request_id: { type: string }
+        pinnedAssetUnplaced:
+          type: boolean
+          enum: [true]
+          description: >-
+            The conversion completed without placing at least one admitted
+            pinned asset. No geometric or visual ownership guess was made.
         source:
           $ref: '#/components/schemas/ConversionSource'
         progress:

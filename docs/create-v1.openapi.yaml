@@ -73,6 +73,48 @@ paths:
         '402': { description: Free candidate allowance exhausted and prepaid wallet balance is insufficient. }
         '429': { description: Daily image quota or sponsored budget exhausted. }
         '502': { description: Branch planning failed after its bounded retry. }
+  /api/v1/create/plan:
+    post:
+      summary: Prepare one durable hosted-redraw plan
+      description: >
+        Performs one gpt-5.6-terra low-reasoning structured-text request over
+        capture metadata and the supplied brand asset inventory. The provider
+        schema is permissive; the Worker canonicalizes the four returned plan
+        fields, records every recovery durably, and returns a structurally
+        valid fallback without purchasing a repair call. The stable
+        effectIdentity is derived from the authenticated principal and the
+        Idempotency-Key. A replay returns the durable canonical JSON only after
+        its stored output digest verifies.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HostedPlanRequest' }
+      responses:
+        '201':
+          description: A newly completed hosted plan.
+          headers:
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HostedPlanResponse' }
+        '200':
+          description: Idempotent replay of the durable canonical plan.
+          headers:
+            X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HostedPlanResponse' }
+        '400': { description: Invalid request or missing Idempotency-Key. }
+        '402': { description: The $0.001 hosted-plan wallet admission lacks funds. }
+        '409': { description: Same key with different input, or a non-stale effect is pending. }
+        '429': { description: Sponsored planner budget exhausted. }
+        '503': { description: Durable storage, billing, or digest verification is unavailable. }
   /api/v1/create/{runId}:
     get:
       summary: Read a run's durable state
@@ -365,6 +407,75 @@ components:
           maxItems: 16
           items: { $ref: '#/components/schemas/RetainLabel' }
         notes: { type: string, minLength: 1, maxLength: 600 }
+    HostedPlanCapture:
+      type: object
+      additionalProperties: false
+      required: [sha256, width, height]
+      properties:
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        width: { type: integer, minimum: 1, maximum: 100000 }
+        height: { type: integer, minimum: 1, maximum: 100000 }
+    HostedPlanAsset:
+      type: object
+      additionalProperties: false
+      required: [inventoryId, sourceUrl, inlineSvg, sha256, mediaType, width, height, captureBox]
+      properties:
+        inventoryId: { type: string, minLength: 1, maxLength: 240 }
+        pageId: { type: string, minLength: 1, maxLength: 240 }
+        domPath: { type: string, minLength: 1, maxLength: 1000 }
+        sourceUrl: { type: [string, 'null'], maxLength: 2000 }
+        inlineSvg: { type: boolean }
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        mediaType: { type: string, minLength: 1, maxLength: 120 }
+        width: { type: integer, minimum: 1, maximum: 100000 }
+        height: { type: integer, minimum: 1, maximum: 100000 }
+        captureBox:
+          type: array
+          minItems: 4
+          maxItems: 4
+          items: { type: number, minimum: 0, maximum: 1000000 }
+    HostedPlanRequest:
+      type: object
+      additionalProperties: false
+      required: [direction, referenceImageAttached]
+      properties:
+        direction: { type: string, minLength: 1, maxLength: 1200 }
+        capture: { $ref: '#/components/schemas/HostedPlanCapture' }
+        brandAssetInventory:
+          type: array
+          maxItems: 240
+          items: { $ref: '#/components/schemas/HostedPlanAsset' }
+        referenceImageAttached: { type: boolean }
+    HostedPinnedAssetChoice:
+      type: object
+      additionalProperties: false
+      required: [inventoryId, reason]
+      properties:
+        inventoryId: { type: string }
+        reason: { type: string }
+    HostedPlanResponse:
+      type: object
+      additionalProperties: false
+      required: [concept, retain, corpusQuery, pinnedAssetChoice, effectIdentity, replayed]
+      properties:
+        concept: { type: string }
+        retain: { $ref: '#/components/schemas/RetainPolicy' }
+        corpusQuery: { type: string }
+        pinnedAssetChoice:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/HostedPinnedAssetChoice'
+        effectIdentity: { type: string, pattern: '^hosted-plan:[a-f0-9]{64}$' }
+        replayed: { type: boolean }
+        degradation:
+          type: object
+          additionalProperties: false
+          required: [reasons]
+          properties:
+            reasons:
+              type: array
+              minItems: 1
+              items: { type: string }
     CreateRunRequest:
       type: object
       additionalProperties: false
