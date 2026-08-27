@@ -78,8 +78,8 @@ paths:
       summary: Prepare one durable hosted-redraw plan
       description: >
         Performs one gpt-5.6-terra low-reasoning structured-text request over
-        capture metadata and the supplied brand asset inventory. The provider
-        schema is permissive; the Worker canonicalizes the four returned plan
+        the redraw direction and optional capture metadata. The provider
+        schema is permissive; the Worker canonicalizes the three returned plan
         fields, records every recovery durably, and returns a structurally
         valid fallback without purchasing a repair call. The stable
         effectIdentity is derived from the authenticated principal and the
@@ -415,25 +415,6 @@ components:
         sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
         width: { type: integer, minimum: 1, maximum: 100000 }
         height: { type: integer, minimum: 1, maximum: 100000 }
-    HostedPlanAsset:
-      type: object
-      additionalProperties: false
-      required: [inventoryId, sourceUrl, inlineSvg, sha256, mediaType, width, height, captureBox]
-      properties:
-        inventoryId: { type: string, minLength: 1, maxLength: 240 }
-        pageId: { type: string, minLength: 1, maxLength: 240 }
-        domPath: { type: string, minLength: 1, maxLength: 1000 }
-        sourceUrl: { type: [string, 'null'], maxLength: 2000 }
-        inlineSvg: { type: boolean }
-        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
-        mediaType: { type: string, minLength: 1, maxLength: 120 }
-        width: { type: integer, minimum: 1, maximum: 100000 }
-        height: { type: integer, minimum: 1, maximum: 100000 }
-        captureBox:
-          type: array
-          minItems: 4
-          maxItems: 4
-          items: { type: number, minimum: 0, maximum: 1000000 }
     HostedPlanRequest:
       type: object
       additionalProperties: false
@@ -441,30 +422,15 @@ components:
       properties:
         direction: { type: string, minLength: 1, maxLength: 1200 }
         capture: { $ref: '#/components/schemas/HostedPlanCapture' }
-        brandAssetInventory:
-          type: array
-          maxItems: 240
-          items: { $ref: '#/components/schemas/HostedPlanAsset' }
         referenceImageAttached: { type: boolean }
-    HostedPinnedAssetChoice:
-      type: object
-      additionalProperties: false
-      required: [inventoryId, reason]
-      properties:
-        inventoryId: { type: string }
-        reason: { type: string }
     HostedPlanResponse:
       type: object
       additionalProperties: false
-      required: [concept, retain, corpusQuery, pinnedAssetChoice, effectIdentity, replayed]
+      required: [concept, retain, corpusQuery, effectIdentity, replayed]
       properties:
         concept: { type: string }
         retain: { $ref: '#/components/schemas/RetainPolicy' }
         corpusQuery: { type: string }
-        pinnedAssetChoice:
-          oneOf:
-            - type: 'null'
-            - $ref: '#/components/schemas/HostedPinnedAssetChoice'
         effectIdentity: { type: string, pattern: '^hosted-plan:[a-f0-9]{64}$' }
         replayed: { type: boolean }
         degradation:

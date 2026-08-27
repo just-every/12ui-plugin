@@ -4,7 +4,7 @@ Public, installable distribution of the `12ui-design` skill and its API
 contracts. The hosted service and documentation live at [12ui.com](https://12ui.com/).
 
 This repository is generated from the private 12ui implementation at the exact
-`@12ui/design` release revision. Version **0.2.49** matches the npm package.
+`@12ui/design` release revision. Version **0.2.50** matches the npm package.
 
 ## Install as a Codex plugin
 
@@ -35,7 +35,7 @@ bundles are retired, while locally modified copies are preserved.
 
 ## Manual directory upload
 
-Each GitHub release attaches `12ui-design-0.2.49.zip`, a validated
+Each GitHub release attaches `12ui-design-0.2.50.zip`, a validated
 skills-only plugin archive with the manifest and skill at the archive root.
 It is suitable for the OpenAI Plugins Directory manual upload flow.
 
@@ -62,6 +62,6 @@ canonical 12ui website favicon sources for every generated release.
 
 Every release is generated from a fixed allowlist, validated for exact skill,
 icon, manifest, marketplace, and contract parity, packaged as a zip, tagged
-`design-v0.2.49`, and published only after the matching npm release
+`design-v0.2.50`, and published only after the matching npm release
 completes. Do not edit generated files directly; changes must originate in the
 12ui release source.
