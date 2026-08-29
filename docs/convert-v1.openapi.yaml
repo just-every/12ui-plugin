@@ -1494,6 +1494,8 @@ components:
       properties:
         id: { type: string, minLength: 1, maxLength: 160 }
         ordinal: { type: integer, minimum: 0 }
+        content_slot:
+          $ref: '#/components/schemas/ConversionPackageContentSlot'
         kind: { type: string, enum: [source, additional] }
         title: { type: string, maxLength: 200 }
         purpose: { type: string, maxLength: 1000 }
@@ -1595,6 +1597,22 @@ components:
                 type: string
                 pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
               description: Document-local artifact id to globally unique multipart filename.
+    ConversionPackageContentSlot:
+      type: object
+      additionalProperties: false
+      required: [content_slot_id, slot_type, target_words]
+      description: >-
+        Atomic editorial replacement contract for one package viewport. Accepted
+        only by static-site HTML packages; the final page carries an additive
+        boundary and the site archive includes content-slots.json.
+      properties:
+        content_slot_id:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'
+        slot_type:
+          type: string
+          enum: [text-column, text-with-graphic, conclusion-footer, other]
+        target_words: { type: integer, minimum: 1 }
     ConversionPackageSourceScreenshot:
       type: object
       additionalProperties: false
