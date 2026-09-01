@@ -9,7 +9,7 @@ If the `12ui` CLI is not present, run `npx -y @12ui/design cli install` once.
 
 Code-generating models converge on a narrow band of visual defaults and cannot see that convergence from inside it. 12ui uses image models and corpus-grounded generation to genuinely explore different directions, handling visual hierarchy, composition, whitespace, and other subtlety not available to code-generating models like yourself. It can expand a single viewport image into a full app. This workflow then converts images with near-pixel fidelity — faster and truer than coding it by hand.
 
-Start where you already are: a finished design image goes to §3, a rough concept to §1, and reference imagery as the deliverable to §5. Each command prints the next, and `12ui <command> --help` prints every flag and its choices — read it rather than guess.
+Start where you already are: a finished design image goes to §3, an existing interface that should get better to §6, a rough concept to §1, and reference imagery as the deliverable to §5. Each command prints the next, and `12ui <command> --help` prints every flag and its choices — read it rather than guess.
 
 ## 1. Draft
 
@@ -70,3 +70,13 @@ Use this when reference imagery itself is the deliverable.
     12ui corpus inspire --query "<product, audience, surface, goal, personality>" --out-dir <directory> --count 4 --reference-image <image.png>
 
 Read `inspire.md` for search modes, ranked manifest order, and interrupted-search recovery.
+
+## 6. Improve
+
+Use improve when one existing interface should get better end to end. Use draft for a new first viewport; use redesign when a live site should be redrawn and expanded across several pages.
+
+    12ui improve <url|image.png>
+    12ui improve <url|image.png> --direction "<detailed style and goal>"
+    12ui improve <url> --target <image.png|layerdoc.json>
+
+Only if needed, read `improve.md` for the full modes.
