@@ -40,6 +40,7 @@ Picking is free. The new winner still needs its target conversion and plan; thei
 - `capture/` and `current.domdoc.json` hold the URL screenshot and selector-verified DOM extraction. Screenshot mode keeps `source.png` instead.
 - `candidates/` keeps every generated option. `winner.png` is the explicit selection or supplied target image.
 - `target/` holds the target LayerDoc, responsive HTML when generated, and extracted assets.
+- If responsive HTML fails or reaches the improve deadline, the kit warns that its free HTML fallback is fixed-layout and still continues to the LayerDoc-based plan.
 - `plan/` holds the selector diff, annotated implementation plan, `token-patch.css`, and added-element specs or assets.
 
 URL plans pass only with at least 60% plausible DOM-side coverage after content, spatial, and neighbour matching. If the gate blocks, use `plan/GATE.md` to inspect the mismatch. The target HTML and LayerDoc remain a sidecar source of truth, but do not treat an unsafe selector mapping as an inline patch.
