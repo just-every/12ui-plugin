@@ -76,8 +76,14 @@ Read `inspire.md` for search modes, ranked manifest order, and interrupted-searc
 Use improve when one existing interface should get better end to end. Use draft for a new first viewport; use redesign when a live site should be redrawn and expanded across several pages.
 
     12ui improve <url|image.png>
-    12ui improve <url|image.png> --direction "<detailed style and goal>"
+    12ui improve <url|image.png> --direction "<detailed style and goal, 693 chars max>"
     12ui improve <url> --target <image.png|layerdoc.json>
+
+Without `--target` this is two commands. The first stops after drafting by design: it converts nothing, exits 0, and prints where the candidate PNGs are. Inspect them, then run the pick. The pick is mandatory — always run it, and the run's `Next:` line prints the exact command:
+
+    12ui improve <url|image.png> --out-dir <kit> --from pick --pick <slot>
+
+Convert and plan run from there. Exit code 0 with an INCOMPLETE kit means nothing has been picked yet, not that the run failed. Never work around the checkpoint by approximating the design in CSS.
 
 The kit's README says what to keep and what to do if a stage stalled; read it before touching code.
 

@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     Account and quota-limited public access to 12ui visual inspiration.
-    Ranking is exposed only through the locked Direct, Balanced, and Adventurer
+    Ranking is exposed only through the locked Direct, Balanced, Adventurer, and Hedge
     modes plus the account-tier `seed` slate-variation control. Caller-selected
     ranking weights, arms, filters, experiments, general standalone search,
     similarity search, and allocation-style retrieval are not part of this
@@ -354,7 +354,7 @@ components:
   schemas:
     InspirationMode:
       type: string
-      enum: [direct, balanced, adventurer]
+      enum: [direct, balanced, adventurer, hedge]
 
     InspireRequest:
       type: object
@@ -372,7 +372,7 @@ components:
           type: integer
           minimum: 1
           maximum: 480
-          description: Public callers are capped at 24; account callers at 480.
+          description: Public callers are capped at 24; account callers at 480. Hedge is restricted to 4 through 12.
         seed:
           type: integer
           minimum: 0
@@ -518,6 +518,10 @@ components:
         relevance: { type: number }
         relevancePercentile: { type: number }
         qualityPercentile: { type: number }
+        evidence:
+          type: object
+          additionalProperties: true
+          description: Internal hedge retrieval diagnostics. Account-only; persisted by Draft without public projection.
 
     InspirePublicItem:
       type: object

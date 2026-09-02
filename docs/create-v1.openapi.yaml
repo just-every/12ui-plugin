@@ -153,6 +153,24 @@ paths:
         image stays stored until the run's TTL collects it. Sending no key, or
         the key that already owns the row, replays durable state. Regenerating
         one screen never invalidates another.
+
+
+        PROMPT EDIT: a JSON `{prompt}` body with a new Idempotency-Key is
+        accepted only for a succeeded candidate whose current PNG is still
+        stored. Its exact prompt is sent directly to gpt-image-2 at quality
+        `medium`, with that PNG as the one and only image input; no planner or
+        LayerDoc is involved. The completed edit replaces this candidate's
+        current image in the returned envelope while retaining the prior R2
+        object for the run TTL. If the edit provider call fails, the prior PNG
+        remains the candidate's current image and this request (and a replay
+        with its same key) returns `502 prompt_edit_failed` without another
+        provider call. An empty body retains the dispatch/regenerate semantics
+        above.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CandidatePromptEditRequest' }
       parameters:
         - in: header
           name: Idempotency-Key
@@ -180,6 +198,8 @@ paths:
                       message: { type: string }
                   - $ref: '#/components/schemas/DependencyPendingError'
         '410': { description: Run expired. }
+        '422': { description: A prompt edit requires a succeeded candidate with a stored current PNG. }
+        '502': { description: A prompt edit failed after claim; its prior candidate image remains available. }
         '402': { description: Free candidate allowance exhausted and prepaid wallet balance is insufficient. }
         '429': { description: Daily image quota or sponsored budget exhausted. }
   /api/v1/create/{runId}/candidates/{slot}/image:
@@ -191,6 +211,34 @@ paths:
           content:
             image/png: {}
         '404': { description: No stored image for this slot. }
+        '410': { description: Run expired. }
+  /api/v1/create/{runId}/candidates/{slot}/revisions:
+    get:
+      summary: List one candidate's immutable image timeline
+      description: >
+        Returns a view-only chronological timeline of every successful
+        generation or prompt edit retained for this run. It never changes the
+        candidate's canonical current image, and therefore does not alter the
+        source of a later generation or issue any paid provider request.
+        Pre-timeline PNGs retained in the candidate's private R2 namespace
+        are reconciled as `legacy` entries on first read.
+      responses:
+        '200':
+          description: Candidate revision metadata and authenticated image routes.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CandidateRevisionTimeline' }
+        '404': { description: Unknown candidate (or another principal's run). }
+        '410': { description: Run expired. }
+  /api/v1/create/{runId}/candidates/{slot}/revisions/{revisionId}/image:
+    get:
+      summary: Serve one immutable candidate revision PNG to the owning principal
+      responses:
+        '200':
+          description: PNG bytes.
+          content:
+            image/png: {}
+        '404': { description: No stored revision for this candidate. }
         '410': { description: Run expired. }
   /api/v1/create/{runId}/prototype-labels/{labelKey}:
     post:
@@ -644,6 +692,43 @@ components:
               properties:
                 width: { type: integer, minimum: 1 }
                 height: { type: integer, minimum: 1 }
+    CandidatePromptEditRequest:
+      type: object
+      additionalProperties: false
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: >
+            Exact natural-language change to apply to the current candidate
+            PNG. Whitespace is preserved when passed to the image provider.
+    CandidateRevision:
+      type: object
+      required: [id, createdAt, kind, image]
+      properties:
+        id:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+        createdAt: { type: string, format: date-time }
+        kind: { type: string, enum: [generation, prompt_edit, legacy] }
+        image:
+          type: string
+          description: Authenticated immutable PNG route for this revision.
+    CandidateRevisionTimeline:
+      type: object
+      required: [currentRevisionId, revisions]
+      properties:
+        currentRevisionId:
+          type: [string, 'null']
+          pattern: '^[1-9][0-9]*$'
+          description: >
+            The revision whose pixels are the candidate's canonical current
+            image, or null while the candidate has no current succeeded PNG.
+        revisions:
+          type: array
+          items: { $ref: '#/components/schemas/CandidateRevision' }
     RunEnvelope:
       type: object
       required: [id, concept, aspect, mode, retain, source, createdAt, expiresAt, candidates]

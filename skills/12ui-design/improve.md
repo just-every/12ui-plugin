@@ -22,6 +22,8 @@ Use `--target` to align or restore a live page to an existing design. A target i
 
 Use `--direction` to steer generation. Give detailed, style-anchored direction: state the intended hierarchy, rhythm, typography, surfaces, color, controls, and mood. Detailed direction beat vague criticism in the measured prompt pass.
 
+`--direction` accepts at most 693 characters, and the CLI refuses a longer one before anything is captured, drawn, or bought. That is not the 1200-character concept limit the `--concept` flags carry: improve sends a 1200-character concept and spends 507 of it on its own style preamble and no-invention clause, so 693 is what the flag has left. Compose within 693 rather than trimming after a refusal; the refusal names the limit, what was written, and how much to cut.
+
 Never name emptiness or thin content as a defect. Models fabricate UI to fill it. The default concept already says to keep all real content, data, and controls and invent nothing.
 
 ## Candidates and picking
@@ -55,14 +57,23 @@ Picking is free. The new winner still needs its target conversion and plan; thei
 - `capture/` and `current.domdoc.json` hold the URL screenshot and selector-verified DOM extraction. Screenshot mode keeps `source.png` instead.
 - `candidates/` keeps every generated option. `winner.png` is the explicit selection or supplied target image.
 - `target/` holds the target LayerDoc, responsive HTML when generated, and extracted assets.
-- If responsive HTML fails or reaches the improve deadline, the kit warns that its free HTML fallback is fixed-layout and still continues to the LayerDoc-based plan.
+- If responsive HTML fails or reaches the improve deadline, the kit warns that its free HTML fallback is fixed-layout and still continues to the LayerDoc-based plan. That run also writes `plan/STALL.md` and says so in its summary and README status: it is a recovered run, not a clean one.
 - `plan/` holds the selector diff, annotated implementation plan, `token-patch.css`, and added-element specs or assets.
+- `token-patch.css` never imports a font over the network. When the design uses a Google font, the patch declares it as a comment and a CSS custom property named for the family, and the plan and README name the family under "Fonts": load it the way the repository already loads fonts — self-host it, or add it to the existing loader — or keep the current family and skip that token.
 
 URL plans pass only with at least 60% plausible DOM-side coverage after content, spatial, and neighbour matching. If the gate blocks, use `plan/GATE.md` to inspect the mismatch. The target HTML and LayerDoc remain a sidecar source of truth, but do not treat an unsafe selector mapping as an inline patch.
 
 ## Using the kit
 
+A kit whose `pick` stage reads INCOMPLETE is a drafts-only kit. The CLI stops after the draw by design: it converted nothing and exited 0. Inspect the candidate PNGs in `candidates/`, then run the pick. The pick is mandatory — always run it, and the run's last line prints the exact command under `Next:`:
+
+    12ui improve <url> --out-dir <kit> --from pick --pick <slot>
+
+Convert and plan run from there. Exit code 0 with an INCOMPLETE kit means nothing has been picked yet, not that the run failed. Never work around the checkpoint by approximating the design in CSS.
+
 Read `README.md` first. It carries the run's honest status, the assets table for this kit, and the recovery commands when a stage did not settle. The table's ship column is the instruction: copy the files marked ship, keep one of any alternate resolution, and read the references without shipping them.
+
+A kit written inside the repository is local audit evidence, not source: when `--out-dir` sits under a `.improve/` directory in a git working tree the CLI appends a `.improve/` rule to the repository root `.gitignore` if nothing ignores it already, and for any other in-repo out-dir it prints one line telling you to ignore that path before committing — never commit the kit.
 
 Plates and cutouts arrive at full resolution and run over a megabyte. Pick one resolution per layer and optimise the PNG — or convert it to WebP where the repository already uses one — before committing, keeping the filename stem so the plan still matches.
 
@@ -80,9 +91,11 @@ When the target LayerDoc declares a raster layer, copy its file into the reposit
 
 ### When a stage stalls
 
-Wait to the bound the CLI prints; never stop a conversion inside its typical window. `--convert-stall-seconds` bounds each hosted wait the convert stage makes, including the free fixed-layout derivation; it defaults to twice the model's typical wall (480s standard and pro, 300s fast). At the bound the CLI either derives fixed-layout HTML free from a LayerDoc that did land, or — when nothing landed and there is nothing to derive — records the abandoned conversion and dispatches exactly one fresh one.
+Wait to the bound the CLI prints; never stop a conversion inside its typical window. `--convert-stall-seconds` bounds each hosted wait the convert stage makes, including the free fixed-layout derivation; it defaults to twice the model's typical wall (480s standard and pro, 300s fast). At the bound the CLI buys nothing. It either derives fixed-layout HTML free from a LayerDoc that did land, or — when nothing landed and there is nothing to derive — stops and hands the conversion back by id, because that conversion is still running, still billing, and cannot be cancelled. The wait is not silent: a `[wait]` line every minute names the elapsed time, the bound, the conversion id, and the service stage.
 
-That retry is the kit's, not the run's. Resuming with `--from convert` re-attaches to the newest conversion the kit already bought rather than buying another; a kit that has spent its retry refuses to dispatch again and says how many conversions it has bought; and `--convert-model pro` gets no automatic retry at all, because no measured typical wall justifies one. `--fresh` is the deliberate way to buy one more.
+A fixed-layout fallback still finishes the kit and still writes `plan/STALL.md`, which names what stalled, how long it waited, and the `12ui resume <conversion-id> --out-dir <kit>/target` that collects the responsive export later if it completes. `resume` recovers an existing purchase and buys nothing. Do not re-run improve to chase a responsive target.
+
+One operator command dispatches at most one conversion, on every model. Resuming with `--from convert` rebuilds the same idempotency key, so it re-attaches to the conversion the kit already bought however many times you run it, and `12ui resume <conversion-id> --out-dir <kit>/target` collects that conversion directly once it finishes. `--fresh` is the only way to buy another, and it is you asking. Every conversion the kit dispatches is priced in `improve.json` before it starts, under `conversionAttempts` and `stages.convert`, so the kit can state its own spend even when nothing settled.
 
 Past that, `plan/STALL.md` names the stage, the hosted run, any abandoned conversions, and the recovery, each command annotated with what it spends:
 
@@ -90,9 +103,11 @@ Past that, `plan/STALL.md` names the stage, the hosted run, any abandoned conver
     12ui convert <kit>/winner.png --output html               # buys one conversion
     12ui improve <url> --target <kit>/winner.png              # buys one fused target conversion
 
-The third form is offered for a URL input only. Do not approximate the design in CSS from the PNG while a stage is incomplete; resume or convert first.
+The third form is offered for a URL input only. Once the LayerDoc exists, carry its raster layers as real assets — copy the files and reference them. Do not approximate the design's layout or text in CSS from the PNG while a stage is incomplete; resume or convert first. The README and `STALL.md` print that one sentence, so an incomplete kit cannot tell you two things.
 
-A stopped run writes the same `STALL.md` and README as a stalled one, at whatever stage it had reached (a signal that arrives after the last requested stage settled writes no `STALL.md` — that run is complete), and closes the kit's `journal.jsonl` with a terminal event naming the stop or the stall. `12ui next <kit>` reads that event and still reports the hosted run as live, because it is: stopping the CLI does not stop the conversion, and there is no cancel — an abandoned conversion runs to completion and bills. Its id is recorded in `improve.json` under `abandonedConversions`. A conversion the stopped run was still waiting on is not abandoned: `--fresh` and the stall retry write their idempotency key to `conversionAttempts` before dispatching, so `STALL.md` names the run the resume attaches to and `--from convert` re-attaches to it instead of buying another. SIGKILL is the exception: it runs no handler, so the kit is not written and the journal's last progress line is the record.
+`plan/STALL.md` has a lifecycle: the CLI writes it at its own bound as well as on a signal, and a later run that settles the stage REPLACES it with a short resolved note naming when the kit stalled and when it settled. A file saying INCOMPLETE beside a README saying settled is not a state this kit can be in; read the README for status either way.
+
+A stopped run writes the same `STALL.md` and README as a stalled one, at whatever stage it had reached (a signal that arrives after the last requested stage settled writes no `STALL.md` — that run is complete), and closes the kit's `journal.jsonl` with a terminal event naming the stop or the stall. `12ui next <kit>` reads that event and still reports the hosted run as live, because it is: stopping the CLI does not stop the conversion, and there is no cancel — a conversion nobody collects runs to completion and bills. `abandonedConversions` in `improve.json` lists the conversions YOU walked away from — a re-pick, a redraw, a `--fresh`; the CLI never adds one of its own. A conversion a stopped or stalled run was still waiting on is not abandoned: every dispatch writes its idempotency key to `conversionAttempts` before it happens, so `STALL.md` names the run the resume attaches to and `--from convert` re-attaches to it instead of buying another. SIGKILL is the exception: it runs no handler, so the kit is not written and the journal's last progress line is the record.
 
 ### When the coverage gate blocks
 
