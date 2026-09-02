@@ -79,4 +79,6 @@ Use improve when one existing interface should get better end to end. Use draft 
     12ui improve <url|image.png> --direction "<detailed style and goal>"
     12ui improve <url> --target <image.png|layerdoc.json>
 
+The kit's README says what to keep and what to do if a stage stalled; read it before touching code.
+
 Only if needed, read `improve.md` for the full modes.

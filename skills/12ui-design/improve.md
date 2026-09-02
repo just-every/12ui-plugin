@@ -2,6 +2,8 @@
 
 Use `improve` to make one existing interface better or pull a built page back to an approved design. It emits a target and implementation kit; it never edits the owning repository.
 
+Generating a design is two commands, not one: the first draws candidates and stops, you look at them, and `--pick <slot>` finishes the run. Bringing your own design with `--target` is one command.
+
 ## Modes
 
 For a live page, pass its URL. The CLI captures the page and extracts a selector-verified DOM document in one local browser context. The plan maps design changes into the page's own selectors.
@@ -24,15 +26,28 @@ Never name emptiness or thin content as a defect. Models fabricate UI to fill it
 
 ## Candidates and picking
 
-Generate several real alternatives with `--candidates`; inspect them, then select one with `--pick`. The default is four candidates and pick A.
+Generate several real alternatives with `--candidates` (2 to 16, default 4); inspect them, then select one with `--pick`. The floor is 2 because a draft draws alternatives to choose between — to work from a single design you already have, pass `--target` instead, which skips draft and pick.
 
-    12ui improve <url> --candidates 4 --pick B --out-dir <kit-dir>
+`--pick` has no default. Run without it and the command stops after the draw, prints where the candidates are and the exact command that continues, and buys no conversion — converting a candidate nobody chose spends money on a guess, and a conversion cannot be cancelled once it starts. Two commands, and you look at the PNGs in between:
 
-The kit keeps every candidate. Re-pick without buying capture or draft again:
+    12ui improve <url> --out-dir <kit-dir>
+    12ui improve <url> --out-dir <kit-dir> --from pick --pick B
+
+Pass `--pick` up front only when the choice is already made (a scripted run that takes whatever the draw gives). The kit keeps every candidate, so re-picking never buys capture or draft again:
 
     12ui improve <url> --out-dir <kit-dir> --from pick --pick C
 
-Picking is free. The new winner still needs its target conversion and plan; their stable keys replay any already-settled work instead of buying it twice.
+Picking is free. The new winner still needs its target conversion and plan; their stable keys replay any already-settled work instead of buying it twice. Re-picking does discard the conversion the old winner paid for: there is no cancel, so that conversion keeps running and keeps billing, and its id is recorded in `improve.json` under `abandonedConversions` and shown in the kit's README.
+
+### Buying again: `--fresh` vs `--redraw`
+
+`--fresh` re-buys **one conversion of the same settled winner** under a new idempotency key, records the abandoned conversion identity, and leaves capture, draft and pick untouched. It is for a stuck conversion of a design you still want.
+
+`--redraw` re-buys **the whole draw**: it discards draft, pick, convert and plan, moves `candidates/` aside to `candidates.previous/`, and draws new candidates. It costs a full draft, so use it only when none of the candidates is worth picking.
+
+    12ui improve <url> --out-dir <kit-dir> --redraw --direction "<new direction>"
+
+`--redraw` is the one flag allowed to change what the draw is: `--direction`, `--candidates` and `--retain` may differ from what the kit recorded, and the new values are written down before the draft runs. Every other flag still has to match the record. Any conversion the redraw discards is appended to `abandonedConversions`, because it keeps running and keeps billing.
 
 ## Kit
 
@@ -45,6 +60,52 @@ Picking is free. The new winner still needs its target conversion and plan; thei
 
 URL plans pass only with at least 60% plausible DOM-side coverage after content, spatial, and neighbour matching. If the gate blocks, use `plan/GATE.md` to inspect the mismatch. The target HTML and LayerDoc remain a sidecar source of truth, but do not treat an unsafe selector mapping as an inline patch.
 
+## Using the kit
+
+Read `README.md` first. It carries the run's honest status, the assets table for this kit, and the recovery commands when a stage did not settle. The table's ship column is the instruction: copy the files marked ship, keep one of any alternate resolution, and read the references without shipping them.
+
+Plates and cutouts arrive at full resolution and run over a megabyte. Pick one resolution per layer and optimise the PNG — or convert it to WebP where the repository already uses one — before committing, keeping the filename stem so the plan still matches.
+
+### Asset roles
+
+- clean plate (`clean-N`): the backdrop with the foreground artwork removed. Use it as the background layer, at full strength. A conversion can emit several: only the base plate is the page's background, and the README marks every other one an alternate backdrop — use it only if you omit the layer it removed as well.
+- cutout (`cutout-N`): the foreground artwork as an alpha PNG. This is the imagery. Copy it into the repo and place it at its bounds; never redraw it in CSS.
+- upscaled plate / upscaled region (`upscaled-*`): a higher-resolution copy of a plate or region for crisp rendering; pick one resolution, do not ship both.
+- source crop (`crop-N`): the layer cropped straight out of the source image; prefer that layer's cutout when one exists.
+- `winner.png`: the whole design; the reference for every visual decision.
+
+### Raster first
+
+When the target LayerDoc declares a raster layer, copy its file into the repository and reference it. Never approximate an existing asset with CSS. A hero can be a single plate or a single cutout, and the plan lists them before tokens for that reason. Keep any scrim light — at most 35% opacity — and state in your report why one is used.
+
+### When a stage stalls
+
+Wait to the bound the CLI prints; never stop a conversion inside its typical window. `--convert-stall-seconds` bounds each hosted wait the convert stage makes, including the free fixed-layout derivation; it defaults to twice the model's typical wall (480s standard and pro, 300s fast). At the bound the CLI either derives fixed-layout HTML free from a LayerDoc that did land, or — when nothing landed and there is nothing to derive — records the abandoned conversion and dispatches exactly one fresh one.
+
+That retry is the kit's, not the run's. Resuming with `--from convert` re-attaches to the newest conversion the kit already bought rather than buying another; a kit that has spent its retry refuses to dispatch again and says how many conversions it has bought; and `--convert-model pro` gets no automatic retry at all, because no measured typical wall justifies one. `--fresh` is the deliberate way to buy one more.
+
+Past that, `plan/STALL.md` names the stage, the hosted run, any abandoned conversions, and the recovery, each command annotated with what it spends:
+
+    12ui improve <same input> --out-dir <kit> --from convert  # resumes; settled stages replay
+    12ui convert <kit>/winner.png --output html               # buys one conversion
+    12ui improve <url> --target <kit>/winner.png              # buys one fused target conversion
+
+The third form is offered for a URL input only. Do not approximate the design in CSS from the PNG while a stage is incomplete; resume or convert first.
+
+A stopped run writes the same `STALL.md` and README as a stalled one, at whatever stage it had reached (a signal that arrives after the last requested stage settled writes no `STALL.md` — that run is complete), and closes the kit's `journal.jsonl` with a terminal event naming the stop or the stall. `12ui next <kit>` reads that event and still reports the hosted run as live, because it is: stopping the CLI does not stop the conversion, and there is no cancel — an abandoned conversion runs to completion and bills. Its id is recorded in `improve.json` under `abandonedConversions`. A conversion the stopped run was still waiting on is not abandoned: `--fresh` and the stall retry write their idempotency key to `conversionAttempts` before dispatching, so `STALL.md` names the run the resume attaches to and `--from convert` re-attaches to it instead of buying another. SIGKILL is the exception: it runs no handler, so the kit is not written and the journal's last progress line is the record.
+
+### When the coverage gate blocks
+
+`plan/GATE.md` replaces `plan-annotated.md` and `token-patch.css` when the captured page and the target are too far apart to anchor. Nothing is missing: the target, its assets, and the raster layers to carry are all still in the kit, and `GATE.md` lists them. Read it, carry the raster layers, and re-capture the page in the state the target depicts before asking for an anchored plan again.
+
+### Fidelity self-check
+
+Before committing, screenshot the page and put it beside `winner.png`. Health checks — legibility, console, tests — do not answer whether the design landed.
+
+### Never discard
+
+`winner.png`; every cutout and plate the assets table names; all real content, data, controls, routes, and tests.
+
 ## Replay and pricing
 
 Stages run capture, draft, pick, convert, then plan. Resume with `--from` and `--to`; settled stages replay and never buy again. Run `--dry-run` first for a zero-network, per-stage ceiling.
@@ -55,9 +116,10 @@ Current ceilings are $0.001 for corpus search, $0.001 for the hosted plan, $0.06
 
 ### Improve in place
 
-Run against the existing page with no reference. State the intended style precisely, inspect the candidates, then apply the selector-anchored plan in the owning repository.
+Run against the existing page with no reference. State the intended style precisely. The first command stops at the draw; look at the candidate PNGs, then pick one and let it finish, and apply the selector-anchored plan in the owning repository.
 
     12ui improve <url> --direction "<detailed style-anchored direction>" --repo <repo> --out-dir <kit-dir>
+    12ui improve <url> --repo <repo> --out-dir <kit-dir> --from pick --pick <slot>
 
 ### Restore after build
 
