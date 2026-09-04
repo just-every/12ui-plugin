@@ -1,14 +1,16 @@
 openapi: 3.1.0
 info:
   title: 12ui Create API
-  version: 1.3.0
+  version: 1.5.0
   description: >
     The /create pipeline tool. A CREATE run turns a concept plus at most 96
     single-reference candidates into gpt-image-2 (quality medium) interface
     designs. A BUILD run branches one approved design into a coherent screen
     set: one metered gpt-5.6-terra director call plans the site or app
     structure, and each planned screen is dispatched with worker-derived
-    references. A run is claimed once with an Idempotency-Key, then each slot
+    references. An IMPROVE run restyles supplied current screens from one
+    approved root with no planner call. A run is claimed once with an
+    Idempotency-Key, then each slot
     is dispatched; retries replay durable state and never repeat paid work,
     and a NEW Idempotency-Key on a settled slot buys exactly one further paid
     attempt. Anonymous callers use the public-preview identity headers with
@@ -17,9 +19,9 @@ info:
 paths:
   /api/v1/create:
     post:
-      summary: Claim a create or build run and materialize its candidates
+      summary: Claim a create, build, or improve run and materialize its candidates
       description: >
-        Two request shapes share this claim endpoint. A CREATE run (the
+        Three request shapes share this claim endpoint. A CREATE run (the
         default schema below) supplies 1-96 candidates. A BUILD run instead
         sends `{source: 'build', concept, winner | referenceImage, aspect?}`.
         The build claim performs one metered gpt-5.6-terra branch-plan call
@@ -40,6 +42,11 @@ paths:
         Header, footer, and page-ending chrome are derived server-side from
         the surface type and each screen's position, never asked of the model.
         Build screens charge quota per dispatched slot rather than at claim.
+        An IMPROVE run instead sends `{source: 'improve', concept, root,
+        screens, retain?, referenceOrder?, aspect?}`. Its supplied screens are
+        the plan: slots a-h follow array order, every slot is immediately
+        dispatchable, and each dispatch attaches exactly the current screen
+        plus approved root. Improve screens charge quota per dispatched slot.
       parameters:
         - in: header
           name: Idempotency-Key
@@ -53,6 +60,7 @@ paths:
               oneOf:
                 - $ref: '#/components/schemas/CreateRunRequest'
                 - $ref: '#/components/schemas/BuildRunRequest'
+                - $ref: '#/components/schemas/ImproveRunRequest'
       responses:
         '201':
           description: Run claimed; envelope of pending candidates.
@@ -69,6 +77,8 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/RunEnvelope' }
         '400': { description: Validation failure (unknown fields fail closed). }
+        '404': { description: An improve screen references an absent or foreign capture. }
+        '422': { description: An improve capture is not ready, has expired, lacks the requested page, or no longer has its screenshot. }
         '409': { description: Idempotency-Key reused with a different request. }
         '402': { description: Free candidate allowance exhausted and prepaid wallet balance is insufficient. }
         '429': { description: Daily image quota or sponsored budget exhausted. }
@@ -145,6 +155,13 @@ paths:
         409 `footer_reference_pending` while the seed is pending or in flight;
         once the seed has FAILED, later footer screens proceed without a
         footer reference. The seed itself and non-footer screens never wait.
+
+
+        IMPROVE screens use exactly two stored references. `current-first`
+        orders `[current screen, approved root]`; `root-first` orders
+        `[approved root, current screen]`. The prompt names both images by
+        their resulting positions. Improve screens have no dependency or
+        footer gate.
 
 
         REGENERATE: sending a NEW Idempotency-Key for a `succeeded` or
@@ -440,6 +457,22 @@ components:
                   maxItems: 16
                   items: { $ref: '#/components/schemas/RetainLabel' }
             notes: { type: string, minLength: 1, maxLength: 600 }
+            source:
+              type: string
+              enum: [inspiration, subject]
+              default: inspiration
+              description: >
+                What the attached image IS, which decides what an exclusion
+                MEANS. inspiration is a design the caller likes, so excluding
+                content or assets is a prohibition against reusing someone
+                else's words or logo. subject is the caller's own page being
+                improved, so the same exclusion is a licence: its words may be
+                rewritten and its brand replaced according to the improvement
+                brief. A create request using subject must include
+                referenceImage and set useReferenceImage: true on every
+                candidate. For a subject root whose content is free, the
+                provider receives a blank canvas as Image 1 and the uploaded
+                subject as Image 2. improve runs always send subject.
     RetainPolicy:
       type: object
       additionalProperties: false
@@ -455,6 +488,7 @@ components:
           maxItems: 16
           items: { $ref: '#/components/schemas/RetainLabel' }
         notes: { type: string, minLength: 1, maxLength: 600 }
+        source: { type: string, enum: [inspiration, subject] }
     HostedPlanCapture:
       type: object
       additionalProperties: false
@@ -495,7 +529,7 @@ components:
       additionalProperties: false
       required: [concept, candidates]
       properties:
-        concept: { type: string, maxLength: 1200 }
+        concept: { type: string, maxLength: 1485 }
         aspect:
           type: string
           enum: [landscape, portrait, square]
@@ -532,6 +566,23 @@ components:
                   are derived server-side by one metered text call over the
                   references' authored metadata.
         referenceImage: { $ref: '#/components/schemas/ReferenceImage' }
+        words:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: >
+            The attached page's own visible text, verbatim and in the order the
+            page shows it, extracted deterministically from that page's captured
+            DOM document. Quoted material, not steering: accepted only when
+            retain.source is 'subject' (the reference is the caller's own page)
+            AND retain includes 'content'; otherwise the request is refused with
+            invalid_words rather than the field being ignored. Too long for the
+            concept, which is capped at 1485 and already spends 885 of it on the
+            improve mandate. The client sends the WHOLE page's text when it fits
+            this budget and the visible screen's text when it does not; a prefix
+            of a longer page is never sent, because a prefix describing a page
+            the attached screen does not show pushes the request toward
+            reproducing that page (measured).
     BuildRunRequest:
       type: object
       additionalProperties: false
@@ -539,7 +590,7 @@ components:
       description: Exactly one of `winner` or `referenceImage` must be present.
       properties:
         source: { type: string, enum: [build] }
-        concept: { type: string, maxLength: 1200 }
+        concept: { type: string, maxLength: 1485 }
         aspect:
           type: string
           enum: [landscape, portrait, square]
@@ -565,9 +616,141 @@ components:
             createRunId: { type: string, pattern: '^crt-[a-f0-9]{40}$' }
             slot: { type: string, enum: [a, b, c, d, e, f, g, h] }
         referenceImage: { $ref: '#/components/schemas/ReferenceImage' }
+    ImproveRunRequest:
+      type: object
+      additionalProperties: false
+      required: [source, concept, root, screens]
+      properties:
+        source: { type: string, enum: [improve] }
+        concept:
+          type: string
+          minLength: 1
+          maxLength: 1485
+          description: Improvement direction sent to every screen edit.
+        retain:
+          allOf:
+            - $ref: '#/components/schemas/RetainInput'
+          description: >
+            Normalized with the Create retain contract. Omitted defaults to
+            assets and content included, layout and style excluded: an improve
+            run keeps the product's own brand and words and is free to rework
+            its geometry. Send layout in retain.include to pin the geometry.
+        root:
+          description: The approved root design; exactly one shape is accepted.
+          oneOf:
+            - type: object
+              additionalProperties: false
+              required: [winner]
+              properties:
+                winner:
+                  type: object
+                  additionalProperties: false
+                  required: [createRunId, slot]
+                  properties:
+                    createRunId: { type: string, pattern: '^crt-[a-f0-9]{40}$' }
+                    slot:
+                      type: string
+                      pattern: '^(?:[a-z]|[ab][a-z]|c[a-r])$'
+                      description: 'Any lowercase slot from a through cr on a draft (`source: create`) run, including winners beyond h.'
+            - type: object
+              additionalProperties: false
+              required: [referenceImage]
+              properties:
+                referenceImage: { $ref: '#/components/schemas/ReferenceImage' }
+        screens:
+          type: array
+          minItems: 1
+          maxItems: 8
+          description: >
+            One candidate per entry; slots a-h follow array order. Every screen
+            supplies exactly one source: an inline `image`, or an owned ready
+            site-capture page reference. Capture references are resolved and
+            presence-checked before the run is materialized.
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/ImproveImageScreen'
+              - $ref: '#/components/schemas/ImproveCaptureScreen'
+        referenceOrder:
+          type: string
+          enum: [current-first, root-first]
+          default: current-first
+        aspect:
+          type: string
+          enum: [landscape, portrait, square]
+          description: >
+            Overrides every candidate canvas. When omitted, each candidate
+            derives its own orientation from its current-screen image.
+    ImproveImageScreen:
+      type: object
+      additionalProperties: false
+      required: [id, title, image]
+      properties:
+        id:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{0,63}$'
+          description: Unique within this request.
+        title: { type: string, minLength: 1, maxLength: 120 }
+        route: { type: string, minLength: 1, maxLength: 300 }
+        surfaceType:
+          type: string
+          enum: [web_page, web_app, mobile_app, immersive]
+          default: web_page
+        image:
+          allOf:
+            - $ref: '#/components/schemas/ReferenceImage'
+          description: The inline current screen being edited.
+        words:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: >
+            THIS screen's own visible text, verbatim and in document order. One
+            improve run polishes up to eight different pages against a single
+            shared concept, so each screen carries its own words. Same gate as
+            the run-level field: retain.source 'subject' and retain including
+            'content', or the request is refused with invalid_words. Same rule
+            too: the whole page's text when it fits this budget, the visible
+            screen's when it does not, never a prefix of a longer page.
+    ImproveCaptureScreen:
+      type: object
+      additionalProperties: false
+      required: [id, title, capture]
+      properties:
+        id:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{0,63}$'
+          description: Unique within this request.
+        title: { type: string, minLength: 1, maxLength: 120 }
+        route: { type: string, minLength: 1, maxLength: 300 }
+        surfaceType:
+          type: string
+          enum: [web_page, web_app, mobile_app, immersive]
+          default: web_page
+        capture:
+          type: object
+          additionalProperties: false
+          required: [captureId, pageId]
+          properties:
+            captureId: { type: string, pattern: '^cap-[a-f0-9]{40}$' }
+            pageId:
+              type: string
+              pattern: '^[a-z0-9][a-z0-9_-]{0,63}$'
+              description: Page id from the owned ready capture manifest.
+        words:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: >
+            THIS screen's own visible text, verbatim and in document order. One
+            improve run polishes up to eight different pages against a single
+            shared concept, so each screen carries its own words. Same gate as
+            the run-level field: retain.source 'subject' and retain including
+            'content', or the request is refused with invalid_words. Same rule
+            too: the whole page's text when it fits this budget, the visible
+            screen's when it does not, never a prefix of a longer page.
     BranchPlan:
       type: object
-      description: Present on build runs only. Absent on create runs.
+      description: Present on build runs only. Absent on create runs; improve returns plan null.
       required: [sitePurpose, statusUpdate, approvedScreenSummary, pages]
       properties:
         sitePurpose:
@@ -630,6 +813,7 @@ components:
           description: >
             Create runs: the candidate's desired quality. Build runs: the page
             title, suffixed `(part N)` for later viewports of the same page.
+            Improve runs: the supplied screen title.
         reference:
           type: object
           required: [kind]
@@ -638,6 +822,22 @@ components:
             referenceId: { type: string }
         width: { type: integer }
         height: { type: integer }
+        screen:
+          type: object
+          additionalProperties: false
+          description: Improve screens only.
+          required: [id, title, surfaceType]
+          properties:
+            id: { type: string }
+            title: { type: string }
+            route: { type: string }
+            surfaceType:
+              type: string
+              enum: [web_page, web_app, mobile_app, immersive]
+        referenceOrder:
+          type: string
+          enum: [current-first, root-first]
+          description: Improve screens only; the exact two-image provider order.
         image:
           type: string
           description: Present when status is `succeeded`.
@@ -741,10 +941,14 @@ components:
           oneOf:
             - { type: 'null' }
             - $ref: '#/components/schemas/RetainPolicy'
-        source: { type: string, enum: [create, build] }
+        source: { type: string, enum: [create, build, improve] }
         createdAt: { type: string, format: date-time }
         expiresAt: { type: string, format: date-time }
-        plan: { $ref: '#/components/schemas/BranchPlan' }
+        plan:
+          description: Build plan, or explicit null on improve runs.
+          oneOf:
+            - { type: 'null' }
+            - $ref: '#/components/schemas/BranchPlan'
         candidates:
           type: array
           items: { $ref: '#/components/schemas/Candidate' }

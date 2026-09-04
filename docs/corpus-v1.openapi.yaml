@@ -372,7 +372,7 @@ components:
           type: integer
           minimum: 1
           maximum: 480
-          description: Public callers are capped at 24; account callers at 480. Hedge is restricted to 4 through 12.
+          description: Public callers are capped at 24; account callers at 480.
         seed:
           type: integer
           minimum: 0

@@ -18,11 +18,29 @@ Use `--target` to align or restore a live page to an existing design. A target i
 
     12ui improve <url> --target <image.png|layerdoc.json>
 
+## What to keep
+
+`--retain` sets what the run holds from the live page, in the four facets the service understands. It leads the concept, so the brief you give is what the design answers.
+
+| facet | held | freed |
+| --- | --- | --- |
+| `layout` | section order and positions stay | the page is laid out again from scratch |
+| `content` | the same words, data and controls | the words may be rewritten and re-sequenced |
+| `assets` | the logo, wordmark and brand imagery | the brand may be replaced |
+| `style` | the existing palette, typography and texture | a new visual system |
+
+The default is `assets,content`: keep the brand and the words, rework the layout and the visual system.
+
+    12ui improve <url> --retain assets,content --direction "<detailed style-anchored direction>"
+    12ui improve <url> --retain layout,content,assets
+
+No combination licenses inventing a product fact. With `content` held the page says the same things; with `content` freed the words may be rewritten but every claim, number, offer, and control it states must still be present and true. The /improve page exposes the same four facets as Keep layout, Keep copy, Keep brand, and Keep style.
+
 ## Direction
 
 Use `--direction` to steer generation. Give detailed, style-anchored direction: state the intended hierarchy, rhythm, typography, surfaces, color, controls, and mood. Detailed direction beat vague criticism in the measured prompt pass.
 
-`--direction` accepts at most 693 characters, and the CLI refuses a longer one before anything is captured, drawn, or bought. That is not the 1200-character concept limit the `--concept` flags carry: improve sends a 1200-character concept and spends 507 of it on its own style preamble and no-invention clause, so 693 is what the flag has left. Compose within 693 rather than trimming after a refusal; the refusal names the limit, what was written, and how much to cut.
+`--direction` accepts at most 600 characters, and the CLI refuses a longer one before anything is captured, drawn, or bought. That is not the 1485-character concept limit the `--concept` flags carry: improve sends a 1485-character concept and reserves 885 of it for the retain mandates `--retain` selects and the no-invention clause it always sends, so 600 is what the flag has left. The reservation is the LONGEST assembly of those mandates, so a brief accepted under one `--retain` set is accepted under every other. Compose within 600 rather than trimming after a refusal; the refusal names the limit, what was written, and how much to cut.
 
 Never name emptiness or thin content as a defect. Models fabricate UI to fill it. The default concept already says to keep all real content, data, and controls and invent nothing.
 
@@ -91,9 +109,9 @@ When the target LayerDoc declares a raster layer, copy its file into the reposit
 
 ### When a stage stalls
 
-Wait to the bound the CLI prints; never stop a conversion inside its typical window. `--convert-stall-seconds` bounds each hosted wait the convert stage makes, including the free fixed-layout derivation; it defaults to twice the model's typical wall (480s standard and pro, 300s fast). At the bound the CLI buys nothing. It either derives fixed-layout HTML free from a LayerDoc that did land, or — when nothing landed and there is nothing to derive — stops and hands the conversion back by id, because that conversion is still running, still billing, and cannot be cancelled. The wait is not silent: a `[wait]` line every minute names the elapsed time, the bound, the conversion id, and the service stage.
+Wait to the no-progress bound the CLI prints; never stop a conversion that is still publishing a live service stage or active lane. `--convert-stall-seconds` bounds each hosted wait the convert stage makes, including the free fixed-layout derivation, only when no new live status or progress is observed. It defaults to 960s (16m) for standard and pro — 20% above the measured 655/642/796s tall-landing walls, rounded to a minute, and four times the 240s standard typical — and 300s for fast. At a true no-progress bound the CLI buys nothing. It either derives fixed-layout HTML free from a LayerDoc that did land, or — when nothing landed and there is nothing to derive — stops and hands the conversion back by id, because that conversion is still running, still billing, and cannot be cancelled. The wait is not silent: a `[wait]` line every minute names the elapsed time, the no-progress bound, the conversion id, and the service stage.
 
-A fixed-layout fallback still finishes the kit and still writes `plan/STALL.md`, which names what stalled, how long it waited, and the `12ui resume <conversion-id> --out-dir <kit>/target` that collects the responsive export later if it completes. `resume` recovers an existing purchase and buys nothing. Do not re-run improve to chase a responsive target.
+A fixed-layout fallback still finishes the kit and still writes `plan/STALL.md`, which names what stalled, how long it waited, and the `12ui resume <conversion-id> --out-dir <kit>/target` that collects `winner.html` when the original responsive export completes. The plan remains based on the fixed-layout fallback; collection does not silently recast it as responsive. `resume` recovers an existing purchase and buys nothing. Do not re-run improve to chase a responsive target.
 
 One operator command dispatches at most one conversion, on every model. Resuming with `--from convert` rebuilds the same idempotency key, so it re-attaches to the conversion the kit already bought however many times you run it, and `12ui resume <conversion-id> --out-dir <kit>/target` collects that conversion directly once it finishes. `--fresh` is the only way to buy another, and it is you asking. Every conversion the kit dispatches is priced in `improve.json` before it starts, under `conversionAttempts` and `stages.convert`, so the kit can state its own spend even when nothing settled.
 
@@ -126,6 +144,35 @@ Before committing, screenshot the page and put it beside `winner.png`. Health ch
 Stages run capture, draft, pick, convert, then plan. Resume with `--from` and `--to`; settled stages replay and never buy again. Run `--dry-run` first for a zero-network, per-stage ceiling.
 
 Current ceilings are $0.001 for corpus search, $0.001 for the hosted plan, $0.06 per draft candidate, $0.05/$0.45/$0.90 for fast/standard/pro conversion, and $0.10 for the standard responsive export. Target LayerDoc preparation is free. Local capture, pick, DOM matching, gate, and annotation are free.
+
+## Whole-site polish
+
+Use site scope to carry one accepted root design across a live site's key pages. It accepts URL input only: the root is captured and improved as usual, then its accepted winner becomes the visual-system reference for each captured current page. The model receives the current page and accepted root as distinct references; by default, the current page comes first so its structure and content remain the editing anchor.
+
+    12ui improve <url> --scope site --direction "<detailed style-anchored direction>" --out-dir <kit-dir>
+
+`--pages` caps free one-hop discovery, including the root, from 2 to 8 pages (default 5). Repeat `--page <url>` to replace discovery with explicit same-origin pages. `--page-concurrency` controls 1–10 simultaneous page conversions (default 3). `--reference-order current-first|root-first` records which image order was sent; the default is `current-first`.
+
+Site scope runs seven stages: `capture → draft → pick → branch → convert → plan → site`. Capture uses one browser and one context for the root and every page. Draft and pick remain root-only. Branch produces one polished image for each non-root page from the accepted root and that page's current screen; the root is never sent as a branch screen. Convert writes the root target once, then one converted target for every non-root page. If responsive HTML is unavailable for the root or any page, that LayerDoc still drives its plan; the kit records the gap and includes free fixed-layout HTML when derivation succeeds. Plan creates a DOM-anchored plan for the root and every non-root page; a blocked page writes `GATE.md` but does not block the rest of the site. The final site stage rolls those plans up, with the root listed as `root`.
+
+The site kit has this exact shape:
+
+```text
+<out-dir>/
+  improve.json                         # v2 record
+  capture/source.png  current.domdoc.json  candidates/  winner.png  target/  plan/   # root, as today
+  pages/<id>/capture/source.png
+  pages/<id>/current.domdoc.json
+  pages/<id>/polished.png              # branch output
+  pages/<id>/target/polished.layerdoc.json (+.assets)  polished.html or derived.fixed.html when available (+.assets)
+  pages/<id>/plan/{diff.json,changes.md,plan-annotated.md,token-patch.css,assets/ | GATE.md}
+  site-plan/{tokens.css,shared-shell.md,pages.md,APPLY.md}
+  README.md
+```
+
+`site-plan/tokens.css` deduplicates token patches and records conflicts, while `shared-shell.md` lists recurring header, navigation, sidebar, or footer changes once with their pages. `pages.md` reports every page's URL, gate, coverage, delta counts, polished image, and target HTML. `APPLY.md` is the coding-model brief: apply tokens through the repository theme entry point, apply shared shell changes once, then apply page residue in order and added-element specs with their assets. It also requires no invention, no dead controls, no hardcoded identity, and configurable data to remain configurable; `--repo` file hints are folded in when supplied.
+
+The kit does not apply code. Apply `APPLY.md`, then run `12ui improve <url> --scope site --out-dir <kit> --recheck`. Recheck reuses the existing kit, opens one browser/context for the root and every site page, and writes `recheck/<n>/pages/<id>/` captures and plans plus `recheck/<n>/report.md`; it never replays settled stages or buys work. Use the report's before→after coverage and matched/added/removed counts to decide whether another focused implementation turn is warranted. Pages without a kept target are captured and reported as unavailable rather than blocking the other pages.
 
 ## Workflow patterns
 

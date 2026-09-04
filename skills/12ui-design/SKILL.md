@@ -15,7 +15,7 @@ Start where you already are: a finished design image goes to §3, an existing in
 
 The draft command uses the best reference concepts from a large design corpus as starting points to generate professional quality UI.
 
-    12ui draft --concept "<product, audience, surface, goal, personality; 1200 chars max>" --candidates 4
+    12ui draft --concept "<product, audience, surface, goal, personality; 1485 chars max>" --candidates 4
 
 Prefer 4 or more candidates. Add `--reference <path-or-url>` to carry an existing interface's style into a new page; it retains style and excludes layout, content, and assets by default. Use `--retain layout` only when source geometry should be preserved.
 
@@ -29,7 +29,7 @@ Only if needed, read `inspire.md` for how to search the corpus directly.
 
 Use whenever the deliverable is more than one viewport — a full page, a multi-route site, an app with several states — expand the approved design rather than re-deriving it per screen.
 
-    12ui branch execute --start <image.png> --scope page|site --convert html --prototype --concept "<what the rest of the surface must cover; 1200 chars max>"
+    12ui branch execute --start <image.png> --scope page|site --convert html --prototype --concept "<what the rest of the surface must cover; 1485 chars max>"
 
 `--scope page` grows that screen into the rest of its page and `--scope site` adds sibling routes and app states. With `--convert html`, ordered `web_page` viewports stay in one continuous page; complete `web_app`, `mobile_app`, and `immersive` states become separate pages so recurring application shells are never stacked into one long document.
 
@@ -76,8 +76,12 @@ Read `inspire.md` for search modes, ranked manifest order, and interrupted-searc
 Use improve when one existing interface should get better end to end. Use draft for a new first viewport; use redesign when a live site should be redrawn and expanded across several pages.
 
     12ui improve <url|image.png>
-    12ui improve <url|image.png> --direction "<detailed style and goal, 693 chars max>"
+    12ui improve <url|image.png> --direction "<detailed style and goal, 600 chars max>"
+    12ui improve <url> --retain layout,content,assets
     12ui improve <url> --target <image.png|layerdoc.json>
+    12ui improve <url> --scope site --direction "<detailed style and goal>"
+
+`--retain` says what to hold from the live page: `layout`, `content`, `assets`, `style`. It defaults to `assets,content` — keep the product's brand and words, rework its layout and visual system. Add `layout` when the geometry must not move; add `style` to work inside the existing visual language; drop `assets` to let the brand be replaced. At least one of the four must be left free: all four retained is refused. Whatever is set, no combination licenses inventing a product fact. The /improve page exposes the same four as Keep layout, Keep copy, Keep brand, and Keep style.
 
 Without `--target` this is two commands. The first stops after drafting by design: it converts nothing, exits 0, and prints where the candidate PNGs are. Inspect them, then run the pick. The pick is mandatory — always run it, and the run's `Next:` line prints the exact command:
 
@@ -87,4 +91,4 @@ Convert and plan run from there. Exit code 0 with an INCOMPLETE kit means nothin
 
 The kit's README says what to keep and what to do if a stage stalled; read it before touching code.
 
-Only if needed, read `improve.md` for the full modes.
+Only if needed, read `improve.md` for the full modes. For a completed site kit after implementation, `--recheck` captures the root and every retained page again and writes a numbered residual report without replaying settled stages.

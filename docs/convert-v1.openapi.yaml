@@ -337,7 +337,9 @@ paths:
         - name: Accept
           in: header
           required: false
-          description: Application JSON or the media type of the requested edit output.
+          description: >-
+            Application JSON, the media type of the requested edit output, or
+            `application/octet-stream` for that same output as bytes.
           schema: { type: string }
         - name: If-None-Match
           in: header
@@ -731,10 +733,20 @@ paths:
         - name: Accept
           in: header
           required: false
+          description: >-
+            `application/octet-stream` is an alias for this conversion's own
+            output: it returns the identical body, still labelled with that
+            output's `content-type`, and is the header to send when the bytes
+            matter. Asking for an HTML result as `text/html` marks the request
+            as a page navigation for anything between you and this service, and
+            an HTML body served to a navigation can be rewritten in flight —
+            which is why `result.sha256` exists and why a digest-checking
+            client should ask for bytes.
           schema:
             type: string
             enum:
               - application/json
+              - application/octet-stream
               - application/vnd.12ui.layerdoc+json;version=2
               - text/html;profile="12ui-responsive-v1"
               - text/html;profile="12ui-progressive-v1"
@@ -880,17 +892,18 @@ paths:
                   This representation never weakens the terminal contract. In
                   the `terminal` state the bytes are exactly those served by
                   `text/html;profile="12ui-responsive-v1"`. Every band planned
-                  by the requested responsive quality is required: after child
-                  recovery is exhausted, a missing required band fails with
-                  `responsive_anchor_required_band_missing`. The native desktop
-                  HTML remains a labeled availability/base artifact for durable
-                  evidence, but it is not written to the responsive result key
-                  and is not a successful responsive result. After that failure,
-                  the JSON operation may expose verified surviving fixed bands
-                  as `responsive_alternative.partial_responsive`, or verified
-                  native bytes as `responsive_alternative.fixed_html_alternative`
-                  when no responsive band landed. Neither is served as this
-                  progressive representation or as complete responsive HTML.
+                  by the requested responsive quality is attempted. After child
+                  recovery is exhausted, one band-coverage policy decides what a
+                  shortfall means: with at least one landed band the export SHIPS
+                  degraded — the surviving bands assembled into one document, and
+                  a required `responsive_coverage` disclosure naming which layouts
+                  landed and which did not, both in the JSON operation and in the
+                  emitted page. With no landed band it fails with
+                  `responsive_anchor_required_band_missing`, and the JSON operation
+                  may expose the verified native bytes as
+                  `responsive_alternative.fixed_html_alternative`. That fixed
+                  document is never served as this progressive representation or
+                  as complete responsive HTML.
                   When nothing has been emitted yet the response is the ordinary `202`, whose
                   envelope carries `progressive_document.unavailable_reason`.
                   Asking for `text/html;profile="12ui-responsive-v1"` keeps its
@@ -2955,6 +2968,8 @@ components:
             - $ref: '#/components/schemas/AppProjectResult'
         responsive_alternative:
           $ref: '#/components/schemas/ResponsiveHtmlAlternative'
+        responsive_coverage:
+          $ref: '#/components/schemas/ResponsiveCoverageDisclosure'
       allOf:
         - $ref: '#/components/schemas/ProjectProfileRequirement'
         - if:
@@ -2970,6 +2985,13 @@ components:
                   code: { const: responsive_anchor_required_band_missing }
             not:
               required: [result]
+        - if:
+            required: [responsive_coverage]
+          then:
+            required: [result]
+            properties:
+              status: { const: succeeded }
+              output: { const: html }
     ConversionSource:
       type: object
       description: >-
@@ -3083,6 +3105,26 @@ components:
         admitted_package_resume_contract: { type: string }
         current_package_policy_revision: { type: string }
         current_package_resume_contract: { type: string }
+    ConversionResultSha256:
+      type: string
+      pattern: '^[a-f0-9]{64}$'
+      description: >-
+        Lowercase SHA-256 of the exact bytes `href` returns for this result.
+        Verify the downloaded body against it and fail closed on a mismatch:
+        the bytes were altered between this service and you. An intermediary
+        that treats the request as a page navigation can append to an HTML
+        document in flight — the failure this field exists to make loud rather
+        than silent — so ask for `application/octet-stream` where the download
+        is a stored body and never write a body that does not hash to this.
+        Absent only for a result published before digests were recorded, in
+        which case download exactly as before.
+    ConversionResultSizeBytes:
+      type: integer
+      minimum: 0
+      description: >-
+        Length in bytes of the same body `sha256` covers. Reported alongside
+        the digest so a truncated transfer and a rewritten one are
+        distinguishable in the failure. Present exactly when `sha256` is.
     ConversionArtifact:
       type: object
       additionalProperties: false
@@ -3129,47 +3171,6 @@ components:
           minItems: 1
           uniqueItems: true
           items: { $ref: '#/components/schemas/ResponsiveArtifactCoverageBand' }
-    ResponsivePartialHtmlBand:
-      type: object
-      additionalProperties: false
-      required: [anchor_id, viewport_width, artifact]
-      properties:
-        anchor_id:
-          type: string
-          enum: [mobile, tablet, compact-desktop]
-        viewport_width: { type: integer, minimum: 1, maximum: 9007199254740991 }
-        artifact:
-          description: >-
-            A responsive partial-band artifact. Its `width` MUST equal the
-            enclosing band's `viewport_width`. OpenAPI cannot express equality
-            between sibling fields; runtime consumers enforce it authoritatively.
-          allOf:
-            - $ref: '#/components/schemas/ConversionArtifact'
-            - type: object
-              required: [role, width]
-              properties:
-                role: { const: responsive-partial-band }
-                media_type: { const: 'text/html;profile="12ui-fixed-v1"' }
-                width: { type: integer, minimum: 1, maximum: 9007199254740991 }
-    ResponsivePartialHtmlAlternative:
-      type: object
-      additionalProperties: false
-      required: [disposition, media_type, coverage, bands]
-      description: >-
-        A failed responsive export with one or more verified fixed-band HTML
-        documents and at least one missing planned band. Bands are separate
-        artifacts; no surviving band is widened across a missing viewport
-        regime, and this is not a complete responsive HTML result.
-      properties:
-        disposition: { const: partial_responsive }
-        media_type:
-          const: 'application/vnd.12ui.responsive-html-band-manifest+json;version=1'
-        coverage: { $ref: '#/components/schemas/ResponsiveArtifactCoverage' }
-        bands:
-          type: array
-          minItems: 1
-          uniqueItems: true
-          items: { $ref: '#/components/schemas/ResponsivePartialHtmlBand' }
     ResponsiveFixedHtmlAlternative:
       type: object
       additionalProperties: false
@@ -3190,12 +3191,40 @@ components:
               properties:
                 role: { const: responsive-fixed-html-alternative }
                 media_type: { const: 'text/html;profile="12ui-fixed-v1"' }
+    ResponsiveCoverageDisclosure:
+      type: object
+      additionalProperties: false
+      required: [revision, complete, planned, landed, missing, headline, detail]
+      description: >-
+        What a SUCCEEDED responsive HTML export says about itself when at least
+        one planned band did not land. Present exactly when the export shipped
+        degraded, so its absence means every planned layout landed. `landed` is
+        always non-empty: a responsive export with no landed band fails with
+        `responsive_anchor_required_band_missing` and exposes
+        `responsive_alternative` instead.
+      properties:
+        revision: { const: responsive-coverage-disclosure-v1 }
+        complete: { const: false }
+        planned:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ResponsiveArtifactCoverageBand' }
+        landed:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ResponsiveArtifactCoverageBand' }
+        missing:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ResponsiveArtifactCoverageBand' }
+        headline: { type: string, minLength: 1 }
+        detail: { type: string, minLength: 1 }
     ResponsiveHtmlAlternative:
-      oneOf:
-        - $ref: '#/components/schemas/ResponsivePartialHtmlAlternative'
+      allOf:
         - $ref: '#/components/schemas/ResponsiveFixedHtmlAlternative'
-      discriminator:
-        propertyName: disposition
       description: >-
         Verified degraded work retained from a terminal failed responsive HTML
         operation. Mutually exclusive with `result`. Package
@@ -3214,6 +3243,8 @@ components:
         artifacts:
           type: array
           items: { $ref: '#/components/schemas/ConversionArtifact' }
+        sha256: { $ref: '#/components/schemas/ConversionResultSha256' }
+        size_bytes: { $ref: '#/components/schemas/ConversionResultSizeBytes' }
     LayerDocPreview:
       type: object
       additionalProperties: false
@@ -3289,6 +3320,8 @@ components:
         artifacts:
           type: array
           items: { $ref: '#/components/schemas/ConversionArtifact' }
+        sha256: { $ref: '#/components/schemas/ConversionResultSha256' }
+        size_bytes: { $ref: '#/components/schemas/ConversionResultSizeBytes' }
     FixedHtmlResult:
       type: object
       description: >-
@@ -3303,6 +3336,8 @@ components:
         artifacts:
           type: array
           items: { $ref: '#/components/schemas/ConversionArtifact' }
+        sha256: { $ref: '#/components/schemas/ConversionResultSha256' }
+        size_bytes: { $ref: '#/components/schemas/ConversionResultSizeBytes' }
     SvgResult:
       allOf:
         - $ref: '#/components/schemas/StaticExportResult'
@@ -3377,6 +3412,8 @@ components:
         artifacts:
           type: array
           items: { $ref: '#/components/schemas/ConversionArtifact' }
+        sha256: { $ref: '#/components/schemas/ConversionResultSha256' }
+        size_bytes: { $ref: '#/components/schemas/ConversionResultSizeBytes' }
     AppProjectResult:
       type: object
       additionalProperties: false
@@ -3389,6 +3426,8 @@ components:
         artifacts:
           type: array
           items: { $ref: '#/components/schemas/ConversionArtifact' }
+        sha256: { $ref: '#/components/schemas/ConversionResultSha256' }
+        size_bytes: { $ref: '#/components/schemas/ConversionResultSizeBytes' }
     StaticExportResult:
       type: object
       description: >-
@@ -3406,6 +3445,8 @@ components:
         artifacts:
           type: array
           items: { $ref: '#/components/schemas/ConversionArtifact' }
+        sha256: { $ref: '#/components/schemas/ConversionResultSha256' }
+        size_bytes: { $ref: '#/components/schemas/ConversionResultSizeBytes' }
     PublicLayerDoc:
       type: object
       description: >-
