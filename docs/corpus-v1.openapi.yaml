@@ -53,6 +53,7 @@ paths:
             x-ratelimit-remaining: { $ref: '#/components/headers/RateLimitRemaining' }
             x-12ui-idempotent-replay: { $ref: '#/components/headers/IdempotentReplay' }
             X-12ui-Funding: { $ref: '#/components/headers/FundingSource' }
+            x-12ui-query-id: { $ref: '#/components/headers/QueryId' }
           content:
             application/json:
               schema:
@@ -145,6 +146,48 @@ paths:
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+
+  /api/v1/corpus/reference-actions:
+    post:
+      tags: [Corpus]
+      operationId: recordCorpusReferenceAction
+      summary: Record one reference action against a served slate page
+      description: |
+        Account-only capture. Attribution is exactly (queryId, rank within that
+        page's items, referenceId). A second opened on the same pair is a
+        revisit. queryId is required and must resolve to this principal's
+        attempt; missing or unresolvable receipts are refused and counted.
+        browseId is grouping only and is never an attribution key.
+        servedFromCache is true when the slate was read from the device cache
+        and the queryId is the originating network receipt.
+      security:
+        - bearerAuth: []
+        - sessionToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReferenceActionRequest' }
+      responses:
+        '201':
+          description: Action recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [ok, eventId]
+                properties:
+                  ok: { type: boolean, enum: [true] }
+                  eventId: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422':
+          description: queryId did not resolve or rank is not on that page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
   /api/v1/corpus/status:
     get:
       tags: [Corpus]
@@ -341,6 +384,9 @@ components:
       schema: { type: integer, minimum: 0 }
     IdempotentReplay:
       schema: { type: string, enum: ['true'] }
+    QueryId:
+      description: Bare corpus query receipt. Account inspire responses only.
+      schema: { type: string, pattern: '^corpus-query:[a-f0-9]{64}$' }
     DesignCorpusRelease:
       schema: { type: string }
     DesignCorpusAssetRelease:
@@ -385,6 +431,39 @@ components:
             The same (q, mode, k, seed) always returns the same slate.
         referenceImage:
           $ref: '#/components/schemas/ReferenceImage'
+        browseId:
+          type: string
+          format: uuid
+          description: |
+            Account tier only. Client-minted browse grouping id, fresh when the
+            query text changes and reused across deeper-k pages and retries.
+            Grouping only; never an attribution key. Not part of the retrieval
+            idempotency hash.
+
+    ReferenceActionRequest:
+      type: object
+      additionalProperties: false
+      required: [queryId, action, servedFromCache]
+      properties:
+        queryId:
+          type: string
+          pattern: '^corpus-query:[a-f0-9]{64}$'
+        referenceId: { type: string }
+        action:
+          type: string
+          enum: [viewed, opened, kept, draft_started, branch_started, replacement_search]
+        rank:
+          type: integer
+          minimum: 1
+          description: |
+            1-based position of the item in that page's items array as served
+            at the moment of the action. Required for every action except
+            replacement_search, which names the slate as a whole.
+        servedFromCache: { type: boolean }
+        browseId:
+          type: string
+          format: uuid
+          description: Grouping only. Never used for arm attribution.
 
     LogoSearchRequest:
       type: object
