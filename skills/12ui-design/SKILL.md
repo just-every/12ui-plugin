@@ -59,9 +59,15 @@ When you have a single image to convert (or for example only designing a single 
 
 All but `html` are free, deterministic, and parallel; reusing a key replays finished work rather than buying it twice.
 
-## 4. Integrate
+## 4. Integrate and close
 
-Avoid rebuilding from scratch because you will lose pixel precision. For a multi-screen HTML branch, use its generated prototype as the interaction and routing baseline before adding application-specific data and behavior. Open the integrated result, follow every transition, resize it, and compare it with the source; fix visible drift rather than accepting a merely functional approximation.
+Avoid rebuilding from scratch because you will lose pixel precision. For a multi-screen HTML branch, use its generated prototype as the interaction and routing baseline before adding application-specific data and behavior.
+
+For every non-trivial completed design implementation, close against the original approved design after the requested functionality and content are in place. Each distinct page or state uses its own original approved image or matching unchanged LayerDoc as the target:
+
+    12ui improve <implemented-url> --target <approved-screen.png|approved-screen.layerdoc.json> --repo <repo> --out-dir <kit>
+
+Read and apply the kit, then compare the rendered result with its approved source at relevant widths and transitions. Keep the requested functional and content changes. Read `improve.md` for target preparation, continuous Branch-page coverage, and recovery.
 
 ## 5. Search
 
@@ -73,22 +79,16 @@ Read `inspire.md` for search modes, ranked manifest order, and interrupted-searc
 
 ## 6. Improve
 
-Use improve when one existing interface should get better end to end. Use draft for a new first viewport; use redesign when a live site should be redrawn and expanded across several pages.
+Use improve for one existing interface. Use draft for a new first viewport; use branch to extend an accepted design.
 
     12ui improve <url|image.png>
-    12ui improve <url|image.png> --direction "<detailed style and goal, 600 chars max>"
-    12ui improve <url> --retain layout,content,assets
-    12ui improve <url> --target <image.png|layerdoc.json>
-    12ui improve <url> --scope site --direction "<detailed style and goal>"
 
-`--retain` says what to hold from the live page: `layout`, `content`, `assets`, `style`. It defaults to `assets,content` — keep the product's brand and words, rework its layout and visual system. Add `layout` when the geometry must not move; add `style` to work inside the existing visual language; drop `assets` to let the brand be replaced. At least one of the four must be left free: all four retained is refused. Whatever is set, no combination licenses inventing a product fact. The /improve page exposes the same four as Keep layout, Keep copy, Keep brand, and Keep style.
+For required post-implementation alignment, follow §4 with `--target`.
 
-Without `--target` this is two commands. The first stops after drafting by design: it converts nothing, exits 0, and prints where the candidate PNGs are. Inspect them, then run the pick. The pick is mandatory — always run it, and the run's `Next:` line prints the exact command:
+Without `--target`, the first stops after drafting by design. Inspect the candidate PNGs, then run the required explicit pick:
 
     12ui improve <url|image.png> --out-dir <kit> --from pick --pick <slot>
 
-Convert and plan run from there. Exit code 0 with an INCOMPLETE kit means nothing has been picked yet, not that the run failed. Never work around the checkpoint by approximating the design in CSS.
+The pick is mandatory. Exit code 0 with an INCOMPLETE kit means nothing has been picked yet, not that the run failed. Never work around the checkpoint by approximating the design in CSS. Read the kit README, then apply the plan.
 
-The kit's README says what to keep and what to do if a stage stalled; read it before touching code.
-
-Only if needed, read `improve.md` for the full modes. For a completed site kit after implementation, `--recheck` captures the root and every retained page again and writes a numbered residual report without replaying settled stages.
+Only if needed, read `improve.md` for modes, controls, target preparation, site work, and kit recovery.

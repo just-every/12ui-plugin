@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: 12ui Create API
-  version: 1.5.0
+  version: 1.5.1
   description: >
     The /create pipeline tool. A CREATE run turns a concept plus at most 96
     single-reference candidates into gpt-image-2 (quality medium) interface
@@ -83,6 +83,47 @@ paths:
         '402': { description: Free candidate allowance exhausted and prepaid wallet balance is insufficient. }
         '429': { description: Daily image quota or sponsored budget exhausted. }
         '502': { description: Branch planning failed after its bounded retry. }
+  /api/v1/create/by-idempotency:
+    get:
+      summary: Read an authenticated Build claim by its stable Idempotency-Key
+      description: >
+        Recovery observation only. The Worker derives the run id from the
+        authenticated current principal and supplied Idempotency-Key; it never
+        claims a run, reserves budget, invokes a provider, repairs candidates,
+        dispatches an image, or writes storage. A ready run returns its normal
+        durable envelope. `202` means the original Build claim has been
+        admitted but has not materialized candidates: `admitting` has no plan
+        reservation visible yet and `planning` holds the original reservation.
+        Account callers may explicitly retry a `404` with their exact saved
+        request and same key; this endpoint never does so. A `released` plan
+        receipt with neither provider-cost nor ledger evidence is a no-cost
+        failure that account UI may present for explicit same-key resume. A
+        `settled` receipt without candidates is terminal:
+        its recorded plan cost makes same-key replay unsafe. Public create runs
+        are currently IP-principal scoped; a public missing/released lookup is
+        deliberately `public_recovery_unconfirmed`, never authorization to
+        retry, because an IP change could otherwise create a second plan.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Owned, unexpired run with materialized candidates.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunEnvelope' }
+        '202':
+          description: Owned Build run remains in its original admission or plan phase; observe again, never post automatically.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BuildRecoveryPending' }
+        '400': { description: Missing or malformed Idempotency-Key. }
+        '404': { description: Account run is absent or belongs to a different principal. }
+        '409': { description: A retryable no-cost plan failure, a settled incomplete plan, an unsupported empty non-Build run, or an unconfirmed public claim. }
+        '410': { description: Owned run expired. }
+        '405': { description: Only GET is allowed. }
   /api/v1/create/plan:
     post:
       summary: Prepare one durable hosted-redraw plan
@@ -137,7 +178,7 @@ paths:
         '404': { description: Unknown run (or another principal's run). }
   /api/v1/create/{runId}/candidates/{slot}:
     post:
-      summary: Dispatch one candidate's single gpt-image-2 call
+      summary: Dispatch one candidate's single recorded GPT Image call
       description: >
         Exactly one dispatch wins; concurrent calls receive 409
         candidate_in_flight and completed candidates replay their stored
@@ -538,6 +579,11 @@ components:
           type: string
           enum: [inspiration, preserve-structure]
           default: inspiration
+        image_profile:
+          type: string
+          enum: [standard, pro]
+          default: standard
+          description: Draft profile. Omitted callers use Standard; Build and Improve reject this field.
         retain: { $ref: '#/components/schemas/RetainInput' }
         candidates:
           type: array
@@ -929,14 +975,37 @@ components:
         revisions:
           type: array
           items: { $ref: '#/components/schemas/CandidateRevision' }
+    BuildRecoveryPending:
+      type: object
+      additionalProperties: false
+      required: [id, source, state]
+      properties:
+        id: { type: string, pattern: '^crt-[a-f0-9]{40}$' }
+        source: { type: string, enum: [build] }
+        state:
+          type: string
+          enum: [admitting, planning]
+          description: >
+            `admitting` is a claimed Build row before its plan reservation is
+            visible; `planning` holds the original plan reservation. Both are
+            observation states and must not trigger a new claim or dispatch.
     RunEnvelope:
       type: object
-      required: [id, concept, aspect, mode, retain, source, createdAt, expiresAt, candidates]
+      required: [id, concept, aspect, mode, imageProfile, imageModel, retain, source, createdAt, expiresAt, candidates]
       properties:
         id: { type: string, pattern: '^crt-[a-f0-9]{40}$' }
         concept: { type: string }
         aspect: { type: string, enum: [landscape, portrait, square] }
         mode: { type: string, enum: [inspiration, preserve-structure] }
+        imageProfile:
+          nullable: true
+          type: string
+          enum: [standard, pro]
+          description: Recorded Draft profile, or null for a run created before profile provenance existed.
+        imageModel:
+          nullable: true
+          type: string
+          description: Immutable provider provenance, or null for a run created before it was recorded.
         retain:
           oneOf:
             - { type: 'null' }

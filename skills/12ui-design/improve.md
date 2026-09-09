@@ -133,7 +133,7 @@ A stopped run writes the same `STALL.md` and README as a stalled one, at whateve
 
 ### Fidelity self-check
 
-Before committing, screenshot the page and put it beside `winner.png`. Health checks — legibility, console, tests — do not answer whether the design landed.
+Before committing, screenshot the page and put it beside its approved source. Health checks — legibility, console, tests — do not answer whether the design landed. For the required target-based closeout of a non-trivial implementation, use [Restore after build](#restore-after-build).
 
 ### Never discard
 
@@ -143,7 +143,7 @@ Before committing, screenshot the page and put it beside `winner.png`. Health ch
 
 Stages run capture, draft, pick, convert, then plan. Resume with `--from` and `--to`; settled stages replay and never buy again. Run `--dry-run` first for a zero-network, per-stage ceiling.
 
-Current ceilings are $0.001 for corpus search, $0.001 for the hosted plan, $0.06 per draft candidate, $0.05/$0.45/$0.90 for fast/standard/pro conversion, and $0.10 for the standard responsive export. Target LayerDoc preparation is free. Local capture, pick, DOM matching, gate, and annotation are free.
+Current ceilings are $0.001 for corpus search, $0.001 for the hosted plan, $0.03 per draft candidate, $0.05/$0.45/$0.90 for fast/standard/pro conversion, and $0.10 for the standard responsive export. Target LayerDoc preparation is free. Local capture, pick, DOM matching, gate, and annotation are free.
 
 ## Whole-site polish
 
@@ -185,7 +185,7 @@ Run against the existing page with no reference. State the intended style precis
 
 ### Restore after build
 
-After draft, convert, and build, use the original winner image or LayerDoc as the target when coding has degraded the design. Run against the build URL. The result is a minimal-delta plan in the build's own selectors, pulling it back inline without disrupting the working build. The coverage gate blocks when drift is no longer safely mappable.
+After draft, convert, and build, close every non-trivial implementation against each distinct page or state's original winner image or unchanged LayerDoc. Run against the build URL after the requested functionality and content are in place. A continuous Branch page may retain ordered approved screen PNGs and page HTML without a composite full-page image or LayerDoc. In that case, use target-based Improve for every available original approved target or state, then independently review the remaining rendered regions against those ordered approved screens. Do not treat one top viewport as proof for lower regions, substitute the root image, or use `--scope site` or `--redraw` to fabricate a target. The result is a minimal-delta plan in the build's own selectors, pulling it back inline without disrupting the working build. Target skips draft and pick; a matching LayerDoc avoids conversion and a PNG target buys one target conversion. Retain the requested behavior and content, apply the kit, and compare the rendered result with the source at relevant widths and transitions. `--recheck` only accepts a settled site kit, and a site run creates a separate branching workflow. Do not buy repeated conversions to chase perfection. The coverage gate blocks when drift is no longer safely mappable.
 
     12ui improve <build-url> --target <original-winner.png|original.layerdoc.json> --repo <repo> --out-dir <restore-kit>
 
