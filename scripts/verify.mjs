@@ -16,6 +16,7 @@ const ROOT_FILES = [
   '.agents',
   '.claude-plugin',
   '.codex-plugin',
+  'DIRECTORY-LISTING.md',
   '.gitignore',
   'LICENSE',
   'README.md',
@@ -30,9 +31,6 @@ const ROOT_FILES = [
 const ASSET_SHA256 = {
   '12ui-icon.png': 'f029b27b26f732d78414f5095bcfa3b3397f73dbe1d1b2ff185530a21ec36627',
   '12ui-icon-dark.png': '2885defa809b2fcfd51c026e71516ef32a04d003521e5b0bc95571878a4bacc5',
-  '12ui-icon-composer.png': 'c59304135043eb5601129ed1c7a104ff465138e2f0c8a57901a0f3aad1a4626c',
-  '12ui-icon-composer-dark.png': '231de1fdecbee642b1395db8e37ba8c6ab25cc67567fd7675c8d5a298fe7cdf6',
-  '12ui-icon.svg': '4d61e1cbcbd2935963df3b477a0997e01462cf197ae3055e088d01e86162f0b7',
 };
 
 // Owner-selected directory screenshots, 2026-08-22. 1600x1000 PNG each.
@@ -109,8 +107,10 @@ export async function verifyPublicPlugin(rootDirectory) {
   assert.equal(plugin.version, packageManifest.version);
   assert.match(plugin.version, /^\d+\.\d+\.\d+$/u);
   assert.ok(plugin.version.length <= 64);
-  assert.ok(plugin.description.length > 0 && plugin.description.length <= 1024);
-  assert.equal(plugin.author.name, 'Just Every');
+  assert.equal(plugin.description, 'Search real design references, draft visual directions, expand an approved design into complete pages, and convert finished images into production-ready code.');
+  assert.ok(plugin.description.length <= 1024);
+  assert.equal(plugin.author.name, '12ui');
+  assert.equal(plugin.homepage, 'https://12ui.com/');
   assert.equal(plugin.repository, 'https://github.com/just-every/12ui-plugin');
   assert.equal(plugin.skills, './skills/');
   assert.equal(plugin.mcpServers, undefined);
@@ -124,17 +124,25 @@ export async function verifyPublicPlugin(rootDirectory) {
     // The production ID is added only after the separately gated registration.
     assert.equal(plugin.apps, undefined);
   }
-  assert.equal(plugin.interface.developerName, 'Just Every');
+  assert.equal(plugin.interface.developerName, '12ui');
   assert.equal(plugin.interface.displayName, '12ui Design');
   assert.ok(plugin.interface.displayName.length <= 30);
   assert.equal(plugin.interface.shortDescription, 'Design interfaces from images');
   assert.ok(plugin.interface.shortDescription.length <= 30);
   assert.doesNotMatch(plugin.interface.shortDescription, /[\r\n]/u);
-  assert.ok(plugin.interface.longDescription.length > 0);
+  assert.equal(plugin.interface.longDescription, 'Search real design references, draft visual directions, expand an approved design into complete pages, and convert finished images into production-ready code.');
   assert.ok(plugin.interface.longDescription.length <= 4000);
   assert.ok(plugin.interface.developerName.length <= 80);
   assert.ok(CATEGORIES.has(plugin.interface.category));
   assert.equal(plugin.interface.category, 'Creativity');
+  assert.deepEqual(plugin.interface.capabilities, [
+    'Create interface designs',
+    'Search design references',
+    'Convert one image into a whole site',
+    'Convert images into code',
+    'Make an app match an image',
+    'Improve the design of a site or app',
+  ]);
   assert.ok(plugin.interface.capabilities.length <= 20);
   for (const capability of plugin.interface.capabilities) {
     assert.ok(capability.length > 0 && capability.length <= 120);
@@ -156,10 +164,19 @@ export async function verifyPublicPlugin(rootDirectory) {
     assert.equal(url.password, '');
     assert.ok(plugin.interface[field].length <= 1024);
   }
+  assert.equal(plugin.interface.websiteURL, 'https://12ui.com/');
+  assert.equal(plugin.interface.privacyPolicyURL, 'https://12ui.com/privacy');
+  assert.equal(plugin.interface.termsOfServiceURL, 'https://12ui.com/terms');
   assert.match(plugin.interface.brandColor, /^#[0-9A-Fa-f]{6}$/u);
   assert.equal(plugin.interface.brandColor, '#0F172A');
-  assert.equal(plugin.interface.composerIcon, './assets/12ui-icon-composer.png');
-  assert.equal(plugin.interface.logo, './assets/12ui-icon.svg');
+  assert.deepEqual(plugin.interface.defaultPrompt, [
+    'Create a well designed interface for this project',
+    'Improve the design of this website',
+    'Turn this image into production code',
+  ]);
+  assert.equal(plugin.interface.composerIcon, './assets/12ui-icon.png');
+  assert.equal(plugin.interface.logo, './assets/12ui-icon.png');
+  assert.equal(plugin.interface.logoDark, './assets/12ui-icon-dark.png');
   assert.deepEqual(
     plugin.interface.screenshots,
     Object.keys(SCREENSHOT_SHA256).sort().map((name) => `./assets/screenshots/${name}`),
@@ -200,20 +217,19 @@ export async function verifyPublicPlugin(rootDirectory) {
     assert.equal(bytes.readUInt32BE(16), SCREENSHOT_DIMENSIONS[name][0]);
     assert.equal(bytes.readUInt32BE(20), SCREENSHOT_DIMENSIONS[name][1]);
   }
-  const ICON_SIZES = {
-    '12ui-icon.png': 512,
-    '12ui-icon-dark.png': 512,
-    '12ui-icon-composer.png': 96,
-    '12ui-icon-composer-dark.png': 96,
-  };
+  const ICON_SIZES = { '12ui-icon.png': 512, '12ui-icon-dark.png': 512 };
   for (const [iconName, side] of Object.entries(ICON_SIZES)) {
     const png = await readAsset(iconName);
     assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
     assert.equal(png.readUInt32BE(16), side);
     assert.equal(png.readUInt32BE(20), side);
   }
-  const svg = (await readAsset('12ui-icon.svg')).toString('utf8');
-  assert.match(svg, /<svg\b[^>]*\bviewBox="0 0 610 610"/u);
+  const listingReference = await readFile(path.join(root, 'DIRECTORY-LISTING.md'), 'utf8');
+  assert.match(listingReference, /\| Name \| 12ui Design \|/u);
+  assert.match(listingReference, /\| Subtitle \| Design interfaces from images \|/u);
+  assert.match(listingReference, /\| Package name \| 12ui-design \|/u);
+  assert.match(listingReference, /\| Customer support URL \| https:\/\/12ui\.com\/contact \|/u);
+  assert.match(listingReference, /Composer icon \(dark\): `assets\/12ui-icon-dark\.png`/u);
 
   for (const skill of SKILLS) {
     const directory = path.join(root, 'skills', skill);

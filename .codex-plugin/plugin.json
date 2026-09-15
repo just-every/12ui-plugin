@@ -1,13 +1,13 @@
 {
   "name": "12ui-design",
-  "version": "0.2.65",
-  "description": "Create distinctive interfaces with 12ui design skills and hosted design APIs.",
+  "version": "0.2.66",
+  "description": "Search real design references, draft visual directions, expand an approved design into complete pages, and convert finished images into production-ready code.",
   "author": {
-    "name": "Just Every",
+    "name": "12ui",
     "email": "support@12ui.com",
     "url": "https://12ui.com/"
   },
-  "homepage": "https://12ui.com/skill",
+  "homepage": "https://12ui.com/",
   "repository": "https://github.com/just-every/12ui-plugin",
   "license": "MIT",
   "keywords": [
@@ -22,25 +22,29 @@
   "interface": {
     "displayName": "12ui Design",
     "shortDescription": "Design interfaces from images",
-    "longDescription": "Search real design references, draft visual directions, expand an approved design into complete pages, and convert finished images into production-ready output.",
-    "developerName": "Just Every",
+    "longDescription": "Search real design references, draft visual directions, expand an approved design into complete pages, and convert finished images into production-ready code.",
+    "developerName": "12ui",
     "category": "Creativity",
     "capabilities": [
       "Create interface designs",
       "Search design references",
-      "Convert interface images to code"
+      "Convert one image into a whole site",
+      "Convert images into code",
+      "Make an app match an image",
+      "Improve the design of a site or app"
     ],
     "websiteURL": "https://12ui.com/",
     "privacyPolicyURL": "https://12ui.com/privacy",
     "termsOfServiceURL": "https://12ui.com/terms",
     "defaultPrompt": [
-      "Create a distinctive interface for this project.",
-      "Find strong visual references before redesigning this page.",
-      "Turn this finished design image into production code."
+      "Create a well designed interface for this project",
+      "Improve the design of this website",
+      "Turn this image into production code"
     ],
     "brandColor": "#0F172A",
-    "composerIcon": "./assets/12ui-icon-composer.png",
-    "logo": "./assets/12ui-icon.svg",
+    "composerIcon": "./assets/12ui-icon.png",
+    "logo": "./assets/12ui-icon.png",
+    "logoDark": "./assets/12ui-icon-dark.png",
     "screenshots": [
       "./assets/screenshots/screenshot-1.png",
       "./assets/screenshots/screenshot-2.png",

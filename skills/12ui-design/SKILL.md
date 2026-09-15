@@ -13,9 +13,9 @@ Start where you already are: a finished design image goes to §3, an existing in
 
 ## 1. Draft
 
-The draft command uses the best reference concepts from a large design corpus as starting points to generate professional quality UI.
+The draft command uses relevant concepts from the design corpus as starting points for UI candidates. Keep the full design brief in `--concept`; optionally write a separate concise visual caption in `--corpus-query` (or `--corpus-query @file`) for reference retrieval, preserving style details wherever they appear in the brief. Hedge caption generation accepts at most 400 characters after whitespace normalization. Longer queries automatically use balanced retrieval with the complete query and a recorded explanation; a short separate caption keeps hedge retrieval. The CLI owns retrieval, downloads, candidate generation, and resumable identities.
 
-    12ui draft --concept "<product, audience, surface, goal, personality; 1485 chars max>" --candidates 4
+    12ui draft --concept "<product, audience, surface, goal, personality; 1485 chars max>" --corpus-query "<surface, layout, typography, imagery, palette; 400 chars max>" --candidates 4
 
 Prefer 4 or more candidates. Add `--reference <path-or-url>` to carry an existing interface's style into a new page; it retains style and excludes layout, content, and assets by default. Use `--retain layout` only when source geometry should be preserved.
 

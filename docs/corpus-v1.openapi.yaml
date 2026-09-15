@@ -536,6 +536,17 @@ components:
         setId: { type: string }
         query: { type: string }
         mode: { $ref: '#/components/schemas/InspirationMode' }
+        retrievalAdjustment:
+          type: object
+          description: Present when Hedge cannot serve the normalized query length and Balanced serves the complete query. The mode field names the effective mode. The original requested mode remains part of the idempotency identity; completed historical responses replay unchanged.
+          required: [code, reason, requestedMode, effectiveMode, queryLength, limit]
+          properties:
+            code: { type: string, enum: [hedge_query_length] }
+            reason: { type: string }
+            requestedMode: { type: string, enum: [hedge] }
+            effectiveMode: { type: string, enum: [balanced] }
+            queryLength: { type: integer, minimum: 401, description: UTF-16 length after collapsing whitespace and trimming. }
+            limit: { type: integer, enum: [400] }
         seed: { type: integer }
         k: { type: integer }
         poolSize: { type: integer }
