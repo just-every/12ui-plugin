@@ -95,6 +95,7 @@ export async function verifyPublicPlugin(rootDirectory) {
   assert.deepEqual(sorted(await readdir(path.join(root, 'docs'))), DOCS);
   assert.deepEqual(sorted(await readdir(path.join(root, 'skills'))), sorted(SKILLS));
 
+
   const packageManifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
   const plugin = JSON.parse(await readFile(path.join(root, '.codex-plugin/plugin.json'), 'utf8'));
   const marketplace = JSON.parse(await readFile(
@@ -234,7 +235,7 @@ export async function verifyPublicPlugin(rootDirectory) {
   for (const skill of SKILLS) {
     const directory = path.join(root, 'skills', skill);
     assert.deepEqual(sorted(await readdir(directory)), [
-      'SKILL.md', 'agents', 'improve.md', 'inspire.md',
+      'SKILL.md', 'agents', 'improve.md', 'inspire.md', 'outputs.md',
     ]);
     const source = await readFile(path.join(directory, 'SKILL.md'), 'utf8');
     assert.match(source, new RegExp(`^name: ${skill}$`, 'mu'));

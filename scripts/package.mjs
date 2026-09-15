@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import {
@@ -129,6 +130,8 @@ export async function verifyOpenAiSkillsOnlyArchive(archivePath) {
   const manifest = JSON.parse(stdout);
   assertOpenAiSkillsOnlyManifest(manifest);
   assertOpenAiSkillsOnlyEntries(entries, manifest);
+  const skill = await execFileAsync('unzip', ['-p', archive, 'skills/12ui-design/SKILL.md'], { encoding: 'utf8' });
+  assert.match(skill.stdout, /12ui (?:convert|cli|capabilities)/u);
   return { archive, entries, manifest };
 }
 

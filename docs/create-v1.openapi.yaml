@@ -497,7 +497,7 @@ components:
                 - type: array
                   maxItems: 16
                   items: { $ref: '#/components/schemas/RetainLabel' }
-            notes: { type: string, minLength: 1, maxLength: 600 }
+            notes: { type: string, minLength: 1 }
             source:
               type: string
               enum: [inspiration, subject]
@@ -528,7 +528,7 @@ components:
           type: array
           maxItems: 16
           items: { $ref: '#/components/schemas/RetainLabel' }
-        notes: { type: string, minLength: 1, maxLength: 600 }
+        notes: { type: string, minLength: 1 }
         source: { type: string, enum: [inspiration, subject] }
     HostedPlanCapture:
       type: object
@@ -543,7 +543,7 @@ components:
       additionalProperties: false
       required: [direction, referenceImageAttached]
       properties:
-        direction: { type: string, minLength: 1, maxLength: 1200 }
+        direction: { type: string, minLength: 1 }
         capture: { $ref: '#/components/schemas/HostedPlanCapture' }
         referenceImageAttached: { type: boolean }
     HostedPlanResponse:
@@ -570,7 +570,7 @@ components:
       additionalProperties: false
       required: [concept, candidates]
       properties:
-        concept: { type: string, maxLength: 1485 }
+        concept: { type: string, minLength: 1 }
         aspect:
           type: string
           enum: [landscape, portrait, square]
@@ -606,7 +606,7 @@ components:
                 description: Condition on the run's uploaded referenceImage.
               direction:
                 type: string
-                maxLength: 120
+                minLength: 1
                 description: >
                   The candidate's single desired quality. Omitted directions
                   are derived server-side by one metered text call over the
@@ -622,9 +622,9 @@ components:
             DOM document. Quoted material, not steering: accepted only when
             retain.source is 'subject' (the reference is the caller's own page)
             AND retain includes 'content'; otherwise the request is refused with
-            invalid_words rather than the field being ignored. Too long for the
-            concept, which is capped at 1485 and already spends 885 of it on the
-            improve mandate. The client sends the WHOLE page's text when it fits
+            invalid_words rather than the field being ignored. Each screen carries
+            its own words separately from the shared concept.
+            The client sends the WHOLE page's text when it fits
             this budget and the visible screen's text when it does not; a prefix
             of a longer page is never sent, because a prefix describing a page
             the attached screen does not show pushes the request toward
@@ -636,7 +636,7 @@ components:
       description: Exactly one of `winner` or `referenceImage` must be present.
       properties:
         source: { type: string, enum: [build] }
-        concept: { type: string, maxLength: 1485 }
+        concept: { type: string, minLength: 1 }
         aspect:
           type: string
           enum: [landscape, portrait, square]
@@ -671,7 +671,6 @@ components:
         concept:
           type: string
           minLength: 1
-          maxLength: 1485
           description: Improvement direction sent to every screen edit.
         retain:
           allOf:
@@ -946,7 +945,6 @@ components:
         prompt:
           type: string
           minLength: 1
-          maxLength: 1000
           description: >
             Exact natural-language change to apply to the current candidate
             PNG. Whitespace is preserved when passed to the image provider.

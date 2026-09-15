@@ -31,7 +31,12 @@ paths:
         price; public-preview callers remain sponsored. A stable
         Idempotency-Key is claimed before dispatch and binds to the normalized
         request. Completed calls replay durably; pending or ambiguous paid
-        effects cannot dispatch again under the same key.
+        effects cannot dispatch again under the same key. A malformed successful
+        upstream body with verified cost evidence is completed as HTTP 502
+        `invalid_corpus_response`, preserving the paid identity and cost. The same
+        key replays that failure without paying again. Valid supplied references
+        can be retained from a partial response, with `responseRecovery` explaining
+        omitted invalid entries. No reference is fabricated.
       security:
         - bearerAuth: []
         - sessionToken: []
@@ -410,7 +415,7 @@ components:
         q:
           type: string
           minLength: 1
-          description: Public callers are capped at 200 Unicode characters; account callers at 8,000 UTF-8 bytes.
+          description: All callers may submit up to 8,000 UTF-8 bytes after whitespace runs are collapsed and surrounding whitespace trimmed. This matches both downstream retrieval endpoints and their embedding input boundary; no supported larger-query endpoint exists. The original request text is retained for identity and is never truncated. Anonymous quotas remain unchanged. Over-budget responses include measured length, unit, limit, and corrective action.
         mode:
           $ref: '#/components/schemas/InspirationMode'
           default: balanced
@@ -747,6 +752,16 @@ components:
       properties:
         error: { type: string }
         message: { type: string }
+        details:
+          type: object
+          properties:
+            field: { type: string, enum: [q] }
+            tier: { type: string, enum: [public, account] }
+            unit: { type: string, enum: [utf8_bytes] }
+            measuredLength: { type: integer }
+            limit: { type: integer }
+            normalization: { type: string, enum: [collapse_whitespace_and_trim] }
+            correctiveAction: { type: string }
 
     Problem:
       type: object
