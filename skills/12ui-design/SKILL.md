@@ -51,6 +51,8 @@ For a single approved image, convert directly rather than branching.
 
     12ui convert <source-image> --output html --out-dir <run-dir>
 
+Keep `convert` running in the foreground until it exits. If the client returns a running shell or background task handle, keep waiting on that same handle; use `12ui next <run-dir> --wait` to observe progress while the original process stays alive. Local conversion runs in that process, so ending the client session with work still in flight can interrupt a dispatched model call. Do not deliver a final response until the command has exited and the saved run reports a terminal result. If it reports `needs-reconciliation`, preserve the run and report that state; do not start a fresh conversion or treat `resume` as permission to repeat uncertain paid work.
+
 Use the returned editable HTML/CSS and assets as the implementation baseline. Derive another supported output from the saved run or its output directory:
 
     12ui convert <run-dir-or-output-dir> --output assets|png|jpg|webp|pdf|react --out-dir <dir>
