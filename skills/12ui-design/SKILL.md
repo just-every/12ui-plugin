@@ -1,6 +1,6 @@
 ---
 name: 12ui-design
-description: "Design interfaces with 12ui, expand an approved screen into pages or app states, convert design images into editable code and assets, and improve existing applications. Use for non-trivial UI creation, image-to-code, and visual redesign."
+description: "Design interfaces with 12ui, expand an approved screen into pages or app states, convert design images into editable code and assets or into a live 3D / Three.js scene, and improve existing applications. Use for non-trivial UI creation, image-to-code, and visual redesign."
 ---
 
 # 12ui Design
@@ -96,3 +96,9 @@ With an approved target, use §4's command to skip drafting. Without `--apply`, 
 Only if needed, read [improve.md](improve.md) for controls, target preparation, site work, and kit use.
 
 The pick is mandatory when generating candidates. Exit code 0 with an INCOMPLETE kit means nothing has been picked yet, not that the run failed. Never work around the checkpoint by approximating the design in CSS.
+
+## 7. 3D scene
+
+When asked to recreate a design image as a live 3D or Three.js scene, with real geometry, light, and interactions rather than a projection of the picture, read [scene.md](scene.md). It uses the local `12ui scene` tools, which need no account and make no network request:
+
+    12ui scene init <scene-dir>
