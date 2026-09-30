@@ -235,7 +235,7 @@ export async function verifyPublicPlugin(rootDirectory) {
   for (const skill of SKILLS) {
     const directory = path.join(root, 'skills', skill);
     assert.deepEqual(sorted(await readdir(directory)), [
-      'SKILL.md', 'agents', 'improve.md', 'inspire.md', 'outputs.md', 'scene.md',
+      'SKILL.md', 'agents', 'improve.md', 'inspire.md', 'outputs.md', 'scene.md', 'session.md',
     ]);
     const source = await readFile(path.join(directory, 'SKILL.md'), 'utf8');
     assert.match(source, new RegExp(`^name: ${skill}$`, 'mu'));

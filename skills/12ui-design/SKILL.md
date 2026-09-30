@@ -5,97 +5,51 @@ description: "Design interfaces with 12ui, expand an approved screen into pages 
 
 # 12ui Design
 
-If the `12ui` CLI is not present, run `npx -y @12ui/design cli install` once.
+If the `12ui` CLI is not present, run `npx -y @12ui/design cli install` once. Check `12ui workflow --help` for the installed persistent-workflow surface. Use the current coding session's available tools first: 12ui records the operation, its inputs, provider choice and returned artifacts; the session performs the requested design work.
 
-The workflow uses image models and corpus-grounded generation to explore visual hierarchy, composition, typography, and distinct design directions. Expand the selected direction, convert it into editable code and assets, then integrate the requested functionality.
+Read [session.md](session.md) before starting. The durable sequence is **prepare → execute → register → continue**. Prepare freezes a request without inference. Execute selects an eligible provider or returns a session handoff. Perform that handoff with the actual tools available in this session, then register the real result. Continue a successful recipe plan to prepare its dependent operations; execute those explicitly. Keep the workspace and operation ID across interruptions; inspect status before continuing.
 
-Start where you already are: a finished design image goes to §3, an existing interface that should get better to §6, a rough concept to §1, and reference imagery as the deliverable to §5. Each command prints the next, and `12ui <command> --help` prints its flags and choices. The same workflow applies in every supported coding client; the CLI selects and checks the execution engine. Read [outputs.md](outputs.md) only for output boundaries or engine-specific requirements.
+Declare only session capabilities you can actually use. Prefer session execution, then eligible subscription CLI execution, then an explicitly authorized OpenAI API route, then an explicitly authorized 12ui route. Subprocess image capability is not inferred. Codex child execution requires explicit trust in its configured tools and hooks; Claude uses supported safe mode and currently accepts no image attachments for text. Key presence is not permission to spend. Do not fall back or start a new operation after an uncertain dispatch; reconcile the saved operation. Read [outputs.md](outputs.md) for native-format and legacy-engine boundaries.
 
 ## 1. Draft
 
-The draft command uses relevant concepts from the design corpus as starting points for UI candidates. Keep the full design brief in `--concept`; optionally write a separate concise visual caption in `--corpus-query` (or `--corpus-query @file`) for reference retrieval, preserving style details wherever they appear in the brief. Hedge caption generation accepts at most 400 characters after whitespace normalization. Longer queries automatically use balanced retrieval with the complete query and a recorded explanation; a short separate caption keeps hedge retrieval. The CLI owns retrieval, downloads, candidate generation, and resumable identities.
+Use the brief to explore composition, hierarchy, typography, imagery and distinct directions. Retrieve relevant design references when useful; [inspire.md](inspire.md) covers the design DB. Keep the complete brief in the workflow prompt and carry local references as imported artifacts.
 
-    12ui draft --concept "<product, audience, surface, goal, personality>" --corpus-query "<surface, layout, typography, imagery, palette; 400 chars max>" --candidates 4
+Prepare an image operation for each meaningful direction, usually four for an open brief. Execute through the session's native image tool when available and register each actual image. Image generation is a model operation; do not substitute CSS drawings or a screenshot of hand-written markup for requested design imagery. Independent directions can run in parallel with separate stable operation keys.
 
-Prefer 4 or more candidates. Add `--reference <path-or-url>` to carry an existing interface's style into a new page; it retains style and excludes layout, content, and assets by default. Use `--retain layout` only when source geometry should be preserved.
+Inspect real images, choose the strongest fit or present a meaningful choice to the user, and preserve the selected artifact and rationale. A prepared operation or a provider completion alone is not an approved design.
 
-Inspect the real candidate images before continuing. Choose the strongest direction—or present the meaningful choice when the user is involved—rather than averaging them into a generic compromise.
-
-Draft dispatches in the foreground, then generation continues server-side. Run `12ui next <run-dir> --wait` to collect the real images. Keep the recorded run and follow the CLI's continuation instructions.
-
-Only if needed, read [inspire.md](inspire.md) for direct corpus search.
+To let the user choose, open the design workspace on the draft run: call `design.slate.show` with its run directory when the `design.slate.*` tools are available. Otherwise run `npx -y @12ui/design workspace open <run-dir> --wait` (`12ui workspace open <run-dir> --wait` when the installed CLI has that command). It first prints the page's address, then blocks until the user decides; if the sandbox blocks its local page server (a listen or write error), rerun the same command with approval to run outside the sandbox, because it needs a local port and the 12ui state folder. Tell the user in one line to choose in that page. Then stay in this turn until the decision arrives, because ending your turn ends the wait: run the command in the background and read its output every 20 seconds or so (sleep, then read), or give it the longest timeout your shell allows. Continue from the JSON decision it prints.
 
 ## 2. Branch
 
-When the deliverable needs more than one viewport—a full page, a multi-route site, or several app states—expand the approved design rather than re-deriving it per screen.
+Expand the selected image into the pages or states the deliverable needs. Keep its visual system while preserving each page's real content and purpose. Record an operation for each expansion, with the chosen image among its inputs.
 
-    12ui branch execute --start <image.png> --scope page|site --convert html --prototype --concept "<what the rest of the surface must cover>"
-
-`--scope page` grows the approved screen into its page; `--scope site` adds sibling routes and app states. Ordered `web_page` viewports belong to one continuous page. Complete application states belong to separate pages; recurring shells must not be stacked into one long document. Inspect the returned page/state mapping and any omitted screens.
-
-    12ui next <run-dir> --wait
-
-Execute stays in the foreground through its work; `next` can report progress from a second shell. `12ui branch resume <run-dir>` continues the recorded run. Avoid independently rebuilding pages while that conversion is running. Screens land in `<run-dir>/branch/screens/`; converted pages land in `<run-dir>/branch/pages/`.
-
-Use `--prototype` with `--convert html` for a clickable baseline in `<run-dir>/branch/prototype/`. Inspect navigation, shared shells, and any holding pages. Generated interactions do not replace the application's real data and behavior.
-
-Add `--polish` only when the user wants the optional design-improvement pass. For an already converted branch:
-
-    12ui prototype <run-dir>
-
-The same opt-in is available as `12ui prototype <run-dir> --polish`.
+Ordered viewports of one continuous page remain regions of that page. Complete application states belong to separate pages; recurring shells must not be stacked into a long document. Inspect every generated page/state and its mapping before implementation. Labels and navigation proposals are separate text operations when needed, not an automatic paid service requirement.
 
 ## 3. Convert
 
-For a single approved image, convert directly rather than branching.
+For a finished design image, prepare the requested conversion directly. Use available session image editing for independent artwork and the coding tools for editable HTML/CSS or the requested framework. Register the output files and material uncertainties. Preserve live text and independent asset ownership; a full-page raster is not editable implementation.
 
-    12ui convert <source-image> --output html --out-dir <run-dir>
-
-Keep `convert` running in the foreground until it exits. If the client returns a running shell or background task handle, keep waiting on that same handle; use `12ui next <run-dir> --wait` to observe progress while the original process stays alive. Local conversion runs in that process, so ending the client session with work still in flight can interrupt a dispatched model call. Do not deliver a final response until the command has exited and the saved run reports a terminal result. If it reports `needs-reconciliation`, preserve the run and report that state; do not start a fresh conversion or treat `resume` as permission to repeat uncertain paid work.
-
-Use the returned editable HTML/CSS and assets as the implementation baseline. Derive another supported output from the saved run or its output directory:
-
-    12ui convert <run-dir-or-output-dir> --output assets|png|jpg|webp|pdf|react --out-dir <dir>
-
-LayerDoc is optional. Native design formats and hosted conversion-ID derivations have different requirements; consult [outputs.md](outputs.md) when those are requested. Keep the run and follow `12ui next <run-dir>` or `12ui resume <run-dir>` for status and recovery.
+The workflow ledger records what an executor produced; it does not itself reconstruct a LayerDoc, render a page or prove fidelity. Native LayerDoc and its design exports require the dedicated conversion path described in [outputs.md](outputs.md). Do not relabel HTML or arbitrary JSON as LayerDoc.
 
 ## 4. Integrate and close
 
-Integrate the converted code and real assets into the owning project. Preserve its framework, routes, data, controls, and tests. For multi-screen HTML, use the generated prototype as the routing and interaction baseline before wiring application behavior.
+Implement against the selected original image in the owning project. Preserve framework, routes, data, controls and tests. Reuse generated assets. For an existing application, read [improve.md](improve.md).
 
-After functionality and content are in place, inspect the real browser against each page or state's original approved image. That image remains the visual authority; a derived document or top-viewport screenshot does not prove alignment for lower regions or other states. Check relevant widths and transitions.
+Inspect the real browser after content and behavior are in place, at relevant wide and narrow widths and through important transitions. Compare each region/state with its original approved image. Correct concrete mismatches in the source and re-render; use a new recorded image edit only when artwork actually needs changing. Keep originals and record the result. Do not impose an automatic broad judge/repair loop.
 
-Correct concrete observed mismatches in the owning source and re-render. Preserve paid assets and the requested behavior and content. When the CLI provides project apply, use it for focused alignment with the approved image:
-
-    12ui improve <implemented-url> --target <approved-screen.png> --repo <repo> --apply --out-dir <directory-outside-repo>
-
-If project apply is unavailable, omit `--apply` to obtain the existing implementation kit and apply its plan in the owning project. Use the result's source diff, build/test evidence, and browser rendering to verify completion. Do not impose a broad model repair loop when focused normalization suffices or the implementation already matches. Read [improve.md](improve.md) for project apply, hosted kits, and continuous-page coverage.
-
-Deliver openable code, assets, and observed limitations. State when rendering or application behavior remains unverified.
+Deliver openable code and assets, the persistent workspace/operation references, checks performed and observed limitations. State when rendering or behavior remains unverified.
 
 ## 5. Search
 
-Use this when reference imagery itself is the deliverable.
-
-    12ui corpus inspire --query "<product, audience, surface, goal, personality>" --out-dir <directory> --count 4 --reference-image <image.png>
-
-Read [inspire.md](inspire.md) for search modes, ranked manifest order, and interrupted-search recovery.
+Use the design DB when reference imagery is the deliverable or helps ground a design. Follow [inspire.md](inspire.md); preserve ranked manifest order and retrieval evidence. Corpus retrieval is a service boundary separate from local generation and implementation.
 
 ## 6. Improve
 
-Use Improve for an existing interface, Draft for a new first viewport, and Branch to extend an accepted design. With project apply available, let the CLI edit the actual application:
+Capture and inspect the existing interface locally. With an approved target, prepare implementation work against that image and edit the actual application. For a new direction, prepare redesign image operations from the current capture, inspect the candidates and record the pick before implementation. The pick is mandatory when generating candidates; a design operation alone does not complete the application change.
 
-    12ui improve <url> --repo <repo> --apply --out-dir <directory-outside-repo>
-
-Without `--target`, the command drafts candidates and stops for a choice. Inspect the PNGs, choose the strongest fit, then continue the same run:
-
-    12ui improve <url> --repo <repo> --apply --out-dir <directory-outside-repo> --from pick --pick <slot>
-
-With an approved target, use §4's command to skip drafting. Without `--apply`, Improve retains its implementation-kit workflow for URL or image input; read the kit README and apply its plan to the project yourself.
-
-Only if needed, read [improve.md](improve.md) for controls, target preparation, site work, and kit use.
-
-The pick is mandatory when generating candidates. Exit code 0 with an INCOMPLETE kit means nothing has been picked yet, not that the run failed. Never work around the checkpoint by approximating the design in CSS.
+Keep real claims, data, offers, controls and behavior even where the target abbreviates them. [improve.md](improve.md) carries the detailed preservation and inspection guidance, plus explicitly selected legacy CLI and hosted-kit routes. These older commands are alternatives, not the default inside a capable coding session.
 
 ## 7. 3D scene
 

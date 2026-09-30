@@ -131,7 +131,7 @@ export async function verifyOpenAiSkillsOnlyArchive(archivePath) {
   assertOpenAiSkillsOnlyManifest(manifest);
   assertOpenAiSkillsOnlyEntries(entries, manifest);
   const skill = await execFileAsync('unzip', ['-p', archive, 'skills/12ui-design/SKILL.md'], { encoding: 'utf8' });
-  assert.match(skill.stdout, /12ui (?:convert|cli|capabilities)/u);
+  assert.match(skill.stdout, /12ui (?:workflow|convert|cli|capabilities)/u);
   return { archive, entries, manifest };
 }
 

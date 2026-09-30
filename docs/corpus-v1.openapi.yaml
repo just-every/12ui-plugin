@@ -3,12 +3,31 @@ info:
   title: 12ui Design Corpus API
   version: 1.0.0
   description: |
-    Account and quota-limited public access to 12ui visual inspiration.
+    Free, quota-limited access to 12ui visual inspiration, with or without an
+    account. Anonymous corpus requests require no API key, browser visitor token,
+    Origin header, Turnstile challenge, or wallet. Optional authentication enables
+    account metadata and higher daily query limits; invalid supplied credentials
+    are rejected rather than silently downgraded to anonymous access.
+
+    All callers to the public retrieval routes share durable per-IP burst limits:
+    30 query requests and 120 read requests per fixed minute, checked before
+    request bodies, caches, or upstream work. IPv6 addresses share a /64 bucket.
+    Query quotas default to 100 per
+    anonymous IP and 2,000 per account per UTC day. Successful replays reuse the
+    original query charge but still count toward burst limits. The global budget
+    remains enforced for accounted embedding costs; no query overflows into a
+    prepaid wallet. Existing verified operator and sponsorship-grant accounting
+    exceptions remain; network burst limits apply to every tier. Hedge's hosted
+    planner cost is not yet included in that embedding receipt, so Hedge remains
+    account-only and its total provider spend is not bounded by the embedding budget alone.
+    Completed historical idempotent results remain immutable: an old receipt may
+    retain its original wallet funding label or HTTP 402 without dispatching or
+    charging again. Those are replay-only compatibility responses.
     Ranking is exposed only through the locked Direct, Balanced, Adventurer, and Hedge
     modes plus the account-tier `seed` slate-variation control. Caller-selected
     ranking weights, arms, filters, experiments, general standalone search,
     similarity search, and allocation-style retrieval are not part of this
-    contract. The account-only logo endpoint is a narrow exception: it searches
+    contract. The logo endpoint is a narrow exception: it searches
     only the release-sealed Logo Bar A allowlist after explicit logo intent.
 servers:
   - url: https://12ui.com
@@ -23,26 +42,30 @@ paths:
       summary: Find visual references in one locked product mode
       description: |
         `mode` defaults to `balanced`. Unknown request fields fail closed; old
-        experimental controls are never ignored. Account callers may include a
-        validated private reference image. Public-preview callers may not.
+        experimental controls are never ignored. Anonymous and account callers
+        may include a validated private reference image. Direct, Balanced, and
+        Adventurer, including image-conditioned retrieval, are free anonymously
+        within limits. Explicit anonymous Hedge requests return HTTP 403
+        `mode_requires_account`, naming the free alternatives; they are not
+        silently rewritten. Authenticated Hedge is free to the caller within
+        account limits, but its hosted planner cost is not in the embedding receipt.
 
-        This is a quota-metered operation. Signed-in accounts use their free
-        daily allowance first and then reserve the published prepaid-wallet
-        price; public-preview callers remain sponsored. A stable
+        This is a free, quota-metered operation. Exhausted daily allowances refuse
+        further queries without charging a wallet. Service-side model costs
+        recorded in the embedding receipt count toward the global sponsored budget
+        under the existing operator and sponsorship accounting policy. A stable
         Idempotency-Key is claimed before dispatch and binds to the normalized
-        request. Completed calls replay durably; pending or ambiguous paid
+        request. Completed calls replay durably; pending or ambiguous upstream
         effects cannot dispatch again under the same key. A malformed successful
         upstream body with verified cost evidence is completed as HTTP 502
-        `invalid_corpus_response`, preserving the paid identity and cost. The same
-        key replays that failure without paying again. Valid supplied references
-        can be retained from a partial response, with `responseRecovery` explaining
-        omitted invalid entries. No reference is fabricated.
+        `invalid_corpus_response`, preserving the operation identity and service
+        cost. The same key replays that failure without dispatching again. Valid
+        supplied references can be retained from a partial response, with
+        `responseRecovery` explaining omitted invalid entries. No reference is fabricated.
       security:
         - bearerAuth: []
         - sessionToken: []
-        - publicPreview: []
-          publicVisitor: []
-          turnstile: []
+        - {}
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -67,9 +90,9 @@ paths:
                   - $ref: '#/components/schemas/InspirePublicResponse'
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/HistoricalPaymentReplay' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/IdempotencyConflict' }
-        '402': { $ref: '#/components/responses/PaymentRequired' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
@@ -82,8 +105,7 @@ paths:
       security:
         - bearerAuth: []
         - sessionToken: []
-        - publicPreview: []
-          publicVisitor: []
+        - {}
       responses:
         '200':
           description: Daily sections. Public callers receive only servable reference IDs and rendition URLs.
@@ -93,7 +115,9 @@ paths:
                 anyOf:
                   - $ref: '#/components/schemas/FeaturedAccountResponse'
                   - $ref: '#/components/schemas/FeaturedPublicResponse'
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
     head:
       tags: [Corpus]
@@ -102,11 +126,12 @@ paths:
       security:
         - bearerAuth: []
         - sessionToken: []
-        - publicPreview: []
-          publicVisitor: []
+        - {}
       responses:
         '200': { description: Featured edition exists }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /api/v1/corpus/logos/search:
@@ -115,15 +140,16 @@ paths:
       operationId: searchCorpusLogos
       summary: Search the release-sealed Logo Bar A allowlist
       description: |
-        Account-only, quota-metered retrieval over the exact eligible Logo Bar A
+        Free anonymous or account retrieval over the exact eligible Logo Bar A
         partition. Design Corpus validates explicit logo intent before embedding,
         resolves the sealed allowlist before vector reads, and never searches held
-        rows. Idempotency, embedding reuse, reservation, exact-cost settlement,
-        daily quota, and prepaid-wallet overflow use the same durable contract as
-        corpus inspiration.
+        rows. Idempotency, embedding reuse, daily quota, and service cost accounting
+        use the same durable contract as corpus inspiration. There is no wallet
+        overflow. Anonymous callers receive safe item metadata without ranking evidence.
       security:
         - bearerAuth: []
         - sessionToken: []
+        - {}
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
@@ -133,7 +159,7 @@ paths:
             schema: { $ref: '#/components/schemas/LogoSearchRequest' }
       responses:
         '200':
-          description: Ranked eligible logo symbols with style and content relevance evidence.
+          description: Ranked eligible logo symbols. Accounts receive style and content relevance evidence; anonymous callers receive safe metadata and rendition URLs.
           headers:
             x-ratelimit-limit: { $ref: '#/components/headers/RateLimitLimit' }
             x-ratelimit-remaining: { $ref: '#/components/headers/RateLimitRemaining' }
@@ -142,12 +168,15 @@ paths:
             x-design-corpus-logo-proof: { $ref: '#/components/headers/LogoServingProof' }
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/LogoSearchResponse' }
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/LogoSearchResponse'
+                  - $ref: '#/components/schemas/LogoSearchPublicResponse'
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '402': { $ref: '#/components/responses/HistoricalPaymentReplay' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/IdempotencyConflict' }
-        '402': { $ref: '#/components/responses/PaymentRequired' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
@@ -193,6 +222,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
+
   /api/v1/corpus/status:
     get:
       tags: [Corpus]
@@ -201,34 +231,43 @@ paths:
       security:
         - bearerAuth: []
         - sessionToken: []
+        - {}
       responses:
         '200':
           description: Active corpus status
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CorpusStatus' }
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /api/v1/corpus/references/{referenceId}:
     get:
       tags: [Corpus]
       operationId: getCorpusReference
-      summary: Get account-only metadata for one reference
+      summary: Get safe public metadata or authenticated metadata for one reference
       security:
         - bearerAuth: []
         - sessionToken: []
+        - {}
       parameters:
         - $ref: '#/components/parameters/ReferenceId'
       responses:
         '200':
-          description: Corpus reference metadata
+          description: Safe anonymous metadata or full account metadata.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ReferenceMetadata' }
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/ReferenceMetadata'
+                  - $ref: '#/components/schemas/PublicReference'
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/ReferenceNotFound' }
         '410': { $ref: '#/components/responses/TrackWithdrawn' }
+        '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /api/v1/corpus/designs/{designId}:
@@ -240,8 +279,7 @@ paths:
       security:
         - bearerAuth: []
         - sessionToken: []
-        - publicPreview: []
-          publicVisitor: []
+        - {}
       parameters:
         - name: designId
           in: path
@@ -256,9 +294,11 @@ paths:
                 anyOf:
                   - $ref: '#/components/schemas/ReferenceMetadata'
                   - $ref: '#/components/schemas/PublicDesign'
+        '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/ReferenceNotFound' }
         '410': { $ref: '#/components/responses/TrackWithdrawn' }
+        '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
   /api/v1/corpus/references/{referenceId}/profile:
@@ -283,15 +323,16 @@ paths:
         '410': { $ref: '#/components/responses/TrackWithdrawn' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 
+
   /api/v1/corpus/references/{referenceId}/image:
     get:
       tags: [Corpus]
       operationId: getCorpusReferenceImage
       summary: Get an immutable thumbnail or reference rendition, including high-density variants
       description: |
-        Authenticated callers are always admitted. A bare anonymous image GET is
-        also admitted while the public preview flag is enabled so browser image
-        elements can render without custom headers.
+        Anonymous image GET and HEAD requests need no custom headers.
+        All callers are subject to the read burst limit,
+        including cache hits and HEAD requests.
       security:
         - bearerAuth: []
         - sessionToken: []
@@ -312,6 +353,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/ReferenceNotFound' }
         '410': { $ref: '#/components/responses/TrackWithdrawn' }
+        '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
     head:
       tags: [Corpus]
@@ -330,8 +372,8 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/ReferenceNotFound' }
         '410': { $ref: '#/components/responses/TrackWithdrawn' }
+        '429': { $ref: '#/components/responses/QueryRateLimited' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
-
 components:
   securitySchemes:
     bearerAuth:
@@ -343,19 +385,6 @@ components:
       in: header
       name: x-session-token
       description: Same-origin authenticated browser session token, sent with session cookies.
-    publicPreview:
-      type: apiKey
-      in: header
-      name: X-12UI-Public-Preview
-    publicVisitor:
-      type: apiKey
-      in: header
-      name: X-12UI-Public-Visitor
-    turnstile:
-      type: apiKey
-      in: header
-      name: cf-turnstile-response
-
   parameters:
     IdempotencyKey:
       in: header
@@ -379,18 +408,31 @@ components:
   headers:
     FundingSource:
       description: >-
-        Server-derived funding source for an account query. Omitted for anonymous
-        callers. `admin` is a 12ui operator's own usage, metered but never drawn
-        from the sponsored pool.
-      schema: { type: string, enum: [sponsored, wallet, admin] }
+        Server-derived service funding label. `sponsored` denotes house-funded
+        retrieval; verified sponsorship grants retain their existing accounting
+        policy. `admin` is a verified operator's own usage, metered outside the
+        sponsored pool. `wallet` can appear only on an immutable historical
+        replay. New corpus retrieval never bills the caller's wallet.
+      schema: { type: string, enum: [sponsored, admin, wallet] }
     RateLimitLimit:
+      description: Daily query allowance on successful queries; the exhausted bucket's limit on HTTP 429.
       schema: { type: integer, minimum: 0 }
     RateLimitRemaining:
+      description: Remaining daily queries on successful queries; zero for an exhausted quota bucket.
       schema: { type: integer, minimum: 0 }
+    RateLimitBucket:
+      description: The exhausted request or daily quota bucket. Burst buckets are corpus-query-minute, corpus-read-minute, or corpus-active-identities.
+      schema: { type: string }
+    RateLimitReset:
+      description: Unix time in seconds at which a known quota window resets.
+      schema: { type: integer, minimum: 0 }
+    RetryAfter:
+      description: Seconds to wait before retrying; only present when a retry delay is known. Minute-window refusals return 1 through 60 seconds and daily-quota refusals wait until the next UTC day.
+      schema: { type: integer, minimum: 1 }
     IdempotentReplay:
       schema: { type: string, enum: ['true'] }
     QueryId:
-      description: Bare corpus query receipt. Account inspire responses only.
+      description: Bare corpus query receipt, preserved on anonymous and authenticated inspire responses and durable replays.
       schema: { type: string, pattern: '^corpus-query:[a-f0-9]{64}$' }
     DesignCorpusRelease:
       schema: { type: string }
@@ -406,6 +448,7 @@ components:
     InspirationMode:
       type: string
       enum: [direct, balanced, adventurer, hedge]
+      description: Hedge requires an authenticated account; the other modes are available anonymously. An explicit anonymous Hedge request is refused, never rewritten to another mode.
 
     InspireRequest:
       type: object
@@ -415,7 +458,7 @@ components:
         q:
           type: string
           minLength: 1
-          description: All callers may submit up to 8,000 UTF-8 bytes after whitespace runs are collapsed and surrounding whitespace trimmed. This matches both downstream retrieval endpoints and their embedding input boundary; no supported larger-query endpoint exists. The original request text is retained for identity and is never truncated. Anonymous quotas remain unchanged. Over-budget responses include measured length, unit, limit, and corrective action.
+          description: All callers may submit up to 8,000 UTF-8 bytes after whitespace runs are collapsed and surrounding whitespace trimmed. This matches both downstream retrieval endpoints and their embedding input boundary; no supported larger-query endpoint exists. The original request text is retained for identity and is never truncated. Over-budget responses include measured length, unit, limit, and corrective action.
         mode:
           $ref: '#/components/schemas/InspirationMode'
           default: balanced
@@ -478,12 +521,13 @@ components:
         q:
           type: string
           minLength: 1
-          description: Account query, limited to 8,000 UTF-8 bytes; must carry explicit logo or brand-mark intent.
+          description: Query limited to 8,000 UTF-8 bytes; must carry explicit logo or brand-mark intent.
         k:
           type: integer
           minimum: 1
           maximum: 60
           default: 12
+          description: Anonymous callers are capped at 24; account callers at 60.
 
     LogoSearchResponse:
       type: object
@@ -524,11 +568,52 @@ components:
         contentSimilarity: { type: number }
         relevance: { type: number }
 
+    LogoSearchPublicResponse:
+      type: object
+      additionalProperties: false
+      required: [version, query, matchedTerms, requestedRole, k, eligibleCandidates, relevancePool, items]
+      properties:
+        version: { type: string, const: logo-bar-a-query-v1 }
+        query: { type: string }
+        matchedTerms:
+          type: array
+          items: { type: string }
+        requestedRole:
+          type: [string, 'null']
+          enum: [symbol, wordmark, combination, null]
+        k: { type: integer, minimum: 1, maximum: 24 }
+        eligibleCandidates: { type: integer, minimum: 0, maximum: 289 }
+        relevancePool: { type: integer, minimum: 0, maximum: 60 }
+        responseRecovery:
+          type: object
+          description: Explains invalid upstream entries omitted without fabricating replacements.
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, logoRole, markType, aspect, width, height, styleTags, description, thumb, thumbHd, ref, refHd]
+            properties:
+              id: { type: string, pattern: '^logo-gen-[A-Za-z0-9._-]{1,120}$' }
+              logoRole: { type: string, enum: [symbol, wordmark, combination] }
+              markType: { type: [string, 'null'] }
+              aspect: { type: string, enum: [landscape, square, portrait] }
+              width: { type: integer, minimum: 1 }
+              height: { type: integer, minimum: 1 }
+              styleTags:
+                type: array
+                items: { type: string }
+              description: { type: [string, 'null'] }
+              thumb: { type: string }
+              thumbHd: { type: string }
+              ref: { type: string }
+              refHd: { type: string }
+
     ReferenceImage:
       type: object
       additionalProperties: false
       required: [data, mediaType, sha256]
-      description: Account-only private redesign source; maximum decoded size 6 MB.
+      description: Validated private redesign source accepted for anonymous and account queries; maximum decoded size 6 MB. This is a retrieval input, not a hosted image-generation request.
       properties:
         data: { type: string, contentEncoding: base64 }
         mediaType: { type: string, enum: [image/png, image/jpeg, image/webp] }
@@ -685,6 +770,7 @@ components:
 
     CorpusStatus:
       type: object
+      description: Anonymous callers receive these allowlisted release and contract fields; authenticated accounts may receive additional operational metadata.
       required: [status, releaseId, model, dimensions, itemCount, queryIdempotencyRevision]
       properties:
         status: { type: string, enum: [ok] }
@@ -698,14 +784,53 @@ components:
         clusterVersion: { type: string }
         bundle:
           type: object
-          additionalProperties: { type: string }
+          description: Anonymous responses contain only these release fingerprints; accounts may receive additional fields.
+          properties:
+            manifestSha256: { type: string }
+            metadataSha256: { type: string }
+            vectorSha256: { type: string }
         queryIdempotencyRevision:
           type: string
           enum: [corpus-query-idempotency-v2]
+        draftReferenceMode:
+          type: string
+          enum: [balanced, hedge]
+          description: Legacy Draft policy hint, ignored by current CLI versions. It does not grant anonymous Hedge access.
 
     ReferenceMetadata:
       type: object
       additionalProperties: true
+
+    PublicReference:
+      type: object
+      additionalProperties: false
+      required: [referenceId, thumb, thumbHd, ref, refHd]
+      properties:
+        referenceId: { type: string }
+        track: { type: string }
+        aspect: { type: string, enum: [landscape, square, portrait] }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        uiType: { type: [string, 'null'] }
+        variantKind: { type: [string, 'null'] }
+        logoRole: { type: [string, 'null'] }
+        markType: { type: [string, 'null'] }
+        paletteTag: { type: [string, 'null'] }
+        colorMode: { type: [string, 'null'] }
+        styleTags:
+          type: array
+          items: { type: string }
+        industry:
+          type: array
+          items: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        description: { type: [string, 'null'] }
+        thumb: { type: string }
+        thumbHd: { type: string }
+        ref: { type: string }
+        refHd: { type: string }
 
     PublicDesign:
       type: object
@@ -776,35 +901,32 @@ components:
         retryable: { type: boolean }
 
   responses:
-    PaymentRequired:
-      description: The free Search allowance is exhausted and the prepaid wallet balance is insufficient.
+    HistoricalPaymentReplay:
+      description: Replay of a completed wallet refusal recorded before corpus retrieval became free. No new wallet admission or charge occurs. New query attempts use free quota and never produce this response through billing.
+      headers:
+        x-12ui-idempotent-replay: { $ref: '#/components/headers/IdempotentReplay' }
       content:
         application/json:
-          schema:
-            type: object
-            required: [error, message, required_micros, available_micros]
-            properties:
-              error: { type: string, const: insufficient_funds }
-              message: { type: string }
-              required_micros: { type: integer, minimum: 1 }
-              available_micros: { type: integer, minimum: 0 }
+          schema: { $ref: '#/components/schemas/Error' }
     ValidationError:
-      description: Invalid JSON, request, mode, removed control, reference image, or asset size.
+      description: Invalid JSON, request, mode, removed control, reference image, asset size, or trusted client network identity.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Unauthorized:
-      description: Authentication is absent or public preview is unavailable.
+      description: Supplied authentication is invalid, or an account-only operation requires authentication.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Forbidden:
-      description: Scope, trusted-origin, Turnstile, or account-only reference-image requirement failed.
+      description: Supplied credentials lack the required scope, or an account-only control or Hedge mode was requested anonymously. Anonymous Hedge returns mode_requires_account with free alternatives.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     IdempotencyConflict:
-      description: Key conflict, in-progress attempt, or ambiguous original paid outcome.
+      description: Key conflict, in-progress attempt, or ambiguous original upstream outcome. A pending attempt may include Retry-After; retry the same key rather than starting a new operation.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -814,14 +936,22 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     QueryRateLimited:
-      description: Daily query quota or shared sponsored budget is exhausted.
+      description: Per-IP burst limit, daily query quota, admission capacity, or global sponsored service budget is exhausted. Burst and daily limits include numeric Retry-After; a nonretryable global-budget refusal has no invented reset time. Wallet funding does not bypass these limits.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+        x-ratelimit-limit: { $ref: '#/components/headers/RateLimitLimit' }
+        x-ratelimit-remaining: { $ref: '#/components/headers/RateLimitRemaining' }
+        x-ratelimit-bucket: { $ref: '#/components/headers/RateLimitBucket' }
+        x-ratelimit-reset: { $ref: '#/components/headers/RateLimitReset' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
     ServiceUnavailable:
-      description: Upstream corpus, durable idempotency, or cost accounting is unavailable.
+      description: Upstream corpus, durable abuse-limit admission, IP identity configuration, idempotency, or cost accounting is unavailable. Admission fails closed when its database or configuration is unavailable.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

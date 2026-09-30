@@ -1,6 +1,10 @@
 # Improve an existing interface
 
-Use Improve to redesign an existing interface or align a built page with its original approved image. `--apply` edits the actual repository; omitting it produces the existing implementation kit for you to apply.
+Use the [persistent session workflow](session.md) to redesign an existing interface or align a built page with its original approved image. Capture the current application locally, import the capture and approved target, prepare the needed image-edit or code operation, execute with available session tools, and register the actual output before continuing. Preserve the current project and use its real browser/build/test tools. An existing approved target does not require fresh candidate generation.
+
+For a new direction, inspect generated redesign candidates and record the selected artifact before preparing implementation. The registered target remains the visual authority. Preserve real claims, numbers, offers, data, and controls. Do not describe sparse real content as a defect to fill with inventions.
+
+The sections below document explicitly selected legacy CLI and hosted-kit routes. They can consume separate provider or 12ui credits and do not use the new workflow operation ledger. Do not choose them automatically inside a capable session or after an uncertain workflow dispatch. For these commands, `--apply` edits the actual repository; omitting it produces an implementation kit for you to apply.
 
 ## Apply to the project
 
