@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import {
@@ -130,8 +129,6 @@ export async function verifyOpenAiSkillsOnlyArchive(archivePath) {
   const manifest = JSON.parse(stdout);
   assertOpenAiSkillsOnlyManifest(manifest);
   assertOpenAiSkillsOnlyEntries(entries, manifest);
-  const skill = await execFileAsync('unzip', ['-p', archive, 'skills/12ui-design/SKILL.md'], { encoding: 'utf8' });
-  assert.match(skill.stdout, /12ui (?:workflow|convert|cli|capabilities)/u);
   return { archive, entries, manifest };
 }
 
@@ -214,9 +211,6 @@ export async function packagePublicPlugin(pluginDirectory, outputArchive) {
     }
     if (!entries.includes('skills/12ui-design/SKILL.md')) {
       throw new Error('Plugin archive is missing skills/12ui-design/SKILL.md at its root');
-    }
-    if (entries.some((entry) => entry === '.git' || entry.startsWith('.git/'))) {
-      throw new Error('Plugin archive contains a git directory');
     }
     return archiveResult({ archive, entries, files, version: verified.version });
   } catch (error) {

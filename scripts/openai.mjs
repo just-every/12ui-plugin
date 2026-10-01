@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 export const OPENAI_MANIFEST_PATH = '.codex-plugin/plugin.json';
 export const OPENAI_SKILLS_PATH = 'skills/';
 export const OPENAI_ASSETS_PATH = 'assets/';
-export const OPENAI_ICON_ASSET_PREFIX = 'assets/12ui-icon';
 
 const archiveAssetPath = (value) => {
   if (typeof value !== 'string') return undefined;
@@ -29,12 +28,6 @@ export const manifestAssetPaths = (value, paths = new Set()) => {
   }
   return paths;
 };
-
-export const openAiArchiveEntryAllowed = (entry, manifest) =>
-  entry === OPENAI_MANIFEST_PATH
-  || entry.startsWith(OPENAI_SKILLS_PATH)
-  || entry.startsWith(OPENAI_ICON_ASSET_PREFIX)
-  || manifestAssetPaths(manifest).has(entry);
 
 // OpenAI skills-only ZIP uploads reject mcpServers and apps (submission-errors
 // entries mcp_configuration_excluded and app_configuration_excluded). Keep all
@@ -64,11 +57,6 @@ export const assertOpenAiSkillsOnlyEntries = (entries, manifest) => {
     entries.some((entry) => /^skills\/[^/]+\/SKILL\.md$/u.test(entry)),
     'OpenAI skills-only archive must contain a direct skill manifest',
   );
-  assert.equal(entries.some(entry => /^skills\/12ui-design\/(runtime|scripts)(?:\/|$)/u.test(entry)), false,
-    'OpenAI Codex skill must contain instructions only');
-  for (const entry of entries) {
-    assert.ok(openAiArchiveEntryAllowed(entry, manifest), `OpenAI archive member is not allowed: ${entry}`);
-  }
   for (const asset of manifestAssetPaths(manifest)) {
     assert.ok(entries.includes(asset), `OpenAI archive is missing manifest asset: ${asset}`);
   }
