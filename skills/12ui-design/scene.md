@@ -6,9 +6,9 @@ Real geometry and light, the page as real HTML over it, 2-3 clicks and drag orbi
 - **Page text stays the converted HTML.** Do not rebuild its text, buttons, logo or fonts yourself.
 - **Hold at +-15 degrees.** No object turns into a card, no floor smears, no edge opens.
 
-**1. Start.** Run this first, in the folder with `source.png`. Convert's `auto` engine uses Codex when it is ready and the 12ui API otherwise. `convert-run` must be a new folder: a retry uses a new name. `serve --detach` prints a pid: stop that server only with `kill <pid>`.
+**1. Start.** Start convert first, in the folder with `source.png`, as a background job, and keep working while it runs. Convert's `auto` engine uses Codex when it is ready and the 12ui API otherwise. `convert-run` must be a new folder: a retry uses a new name. `serve --detach` prints a pid: stop that server only with `kill <pid>`.
 
-    nohup 12ui convert source.png --output html --engine auto --out-dir convert-run > convert.log 2>&1 < /dev/null &
+    12ui convert source.png --output html --engine auto --out-dir convert-run
     12ui scene init .
     12ui scene serve . --port <port> --detach
 
@@ -29,15 +29,9 @@ Real geometry and light, the page as real HTML over it, 2-3 clicks and drag orbi
 **4. Merge, when convert is done.** Run `12ui scene merge convert-run .`. It reads the run the way its engine wrote it, puts the page's styles in `<head>` and its body in `#stage` at the source frame, copies the files the page uses, and lists its images, with the source box `x0,y0,x1,y1` where the run declares one. While convert is still running it says so and writes nothing: keep modelling and merge later. Then:
 - Run it again with `--drop <image>,...` naming the image(s) the 3D scene replaces; it removes every `<img>` and `url()` using them. Each merge replaces the last one, edits inside it included, so do the steps below after it.
 - In `index.html`, clear the background of the box that held the 3D image and of any wrapper over the 3D area, so the canvas under `#stage` shows through. Panels over flat page area keep theirs.
-- Capture blocks remote fonts. If merge printed `fonts:`, fetch them and point the page at the local copy:
-
-      mkdir -p fonts && grep -o 'https://fonts.googleapis.com/[^"]*' index.html | xargs curl -s > fonts/fonts.css
-      for u in $(grep -o 'https://fonts.gstatic.com/[^)]*' fonts/fonts.css); do curl -s "$u" -o "fonts/${u##*/}"; done
-      perl -pi -e 's#https://fonts.gstatic.com/[^)]*/##' fonts/fonts.css
-      perl -pi -e 's#https://fonts.googleapis.com/[^"]*#fonts/fonts.css#' index.html
 
 If convert fails, or merge says it stopped, recover it as the CLI prints: `12ui next convert-run`, then the `12ui resume` it names. If convert still fails, report that it failed and stop.
 
-**5. Check.** Run `12ui scene capture http://127.0.0.1:<port>/index.html --out-dir shots/i01 --orbit=-15,15` (a new `shots/iNN` each time) and look at `landing`, `az-15` and `az+15`; `remote requests blocked` above 0 is a defect. Fix the biggest mismatch first (placement, silhouettes, light, colour) and capture again. Stop when landing reads as the source and +-15 holds.
+**5. Check.** Run `12ui scene capture http://127.0.0.1:<port>/index.html --out-dir shots/i01 --orbit=-15,15` (a new `shots/iNN` each time) and look at `landing`, `az-15` and `az+15`. Fix the biggest mismatch first (placement, silhouettes, light, colour) and capture again. Stop when landing reads as the source and +-15 holds.
 
 **6. Report** in two lines: the URL and what you built (objects, interactions); the landing capture path and what still differs.

@@ -12,7 +12,7 @@ info:
     All callers to the public retrieval routes share durable per-IP burst limits:
     30 query requests and 120 read requests per fixed minute, checked before
     request bodies, caches, or upstream work. IPv6 addresses share a /64 bucket.
-    Query quotas default to 100 per
+    Query quotas default to 1,000 per
     anonymous IP and 2,000 per account per UTC day. Successful replays reuse the
     original query charge but still count toward burst limits. The global budget
     remains enforced for accounted embedding costs; no query overflows into a
