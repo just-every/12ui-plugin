@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "12ui-workspace": {
+      "type": "http",
+      "url": "https://design.12ui.com/mcp"
+    }
+  }
+}

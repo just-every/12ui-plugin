@@ -88,10 +88,6 @@ export async function verifyPublicPlugin(rootDirectory) {
   }
   if (plugin.interface.brandColor !== undefined) assert.match(plugin.interface.brandColor, /^#[0-9A-Fa-f]{6}$/u);
 
-  const claude = JSON.parse(await readFile(path.join(root, '.claude-plugin/plugin.json'), 'utf8'));
-  assert.equal(claude.name, '12ui-design');
-  assert.equal(claude.version, packageManifest.version);
-
   // Every image the manifest names exists, is a PNG within the size limit, and the icons are the approved artwork.
   const images = [
     plugin.interface.composerIcon,

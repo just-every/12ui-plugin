@@ -1,7 +1,7 @@
 # 12ui Design directory listing
 
 Use these generated values when submitting this release to a directory form.
-The version is **0.2.84**.
+The version is **0.2.85**.
 
 | Field | Value |
 | --- | --- |
