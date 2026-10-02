@@ -6,7 +6,7 @@ Your agent runs the 12ui command line once per request, which draws every option
 
 Works in Claude Code on a computer with Node.js; your agent installs the 12ui command line once. Drawing needs Codex signed in with ChatGPT on the same computer; without it nothing is drawn and each option shows the reason. The pane needs Claude Code 2.1.287 or later, in the terminal or the Desktop app's Code tab. The draw command reaches design.12ui.com, and Claude Code asks you to approve it.
 
-Version 0.2.86. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
+Version 0.2.87. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
 
 ## Requirements
 
