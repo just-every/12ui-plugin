@@ -5,7 +5,7 @@
  * registry, so the engine's MCP route refuses them; a plain POST reaches them (design §3.2, planner probes 1 and 2). The
  * server is stateless JSON, so no `initialize` is needed.
  *
- * Pure: the one fetch lives in register.mjs, its address (https://design.12ui.com/mcp, the plugin's `.mcp.json` URL)
+ * Pure: the one fetch lives in register.mjs, its address (https://design.12ui.com/mcp, the plugin's inline MCP URL)
  * and options written at the call. This module builds the request body and reads the answer.
  */
 
@@ -32,15 +32,16 @@ export function rpcBody(name, args) {
 }
 
 /** An answer the pane shows as its error line: the server's or the transport's own words, verbatim. */
-export class WorkspaceError extends Error {
-  constructor(message, { code = null, status = null, retryable = false } = {}) {
-    super(message);
-    this.name = 'WorkspaceError';
-    this.code = code;
-    this.status = status;
-    this.retryable = retryable;
-  }
+export function WorkspaceError(message, { code = null, status = null, retryable = false } = {}) {
+  const error = new Error(message);
+  Object.setPrototypeOf(error, WorkspaceError.prototype);
+  error.code = code;
+  error.status = status;
+  error.retryable = retryable;
+  return error;
 }
+WorkspaceError.prototype = Object.create(Error.prototype);
+WorkspaceError.prototype.name = 'WorkspaceError';
 
 function firstText(content) {
   if (!Array.isArray(content)) return '';

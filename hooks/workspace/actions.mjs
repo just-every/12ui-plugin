@@ -18,12 +18,14 @@ export const EDIT_PROMPT_MAX_BYTES = 6000;
 export const BRIEF_MAX_CHARS = 2000;
 
 /** A request the pane cannot send as it stands, with the words it shows. */
-export class ActionError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'ActionError';
-  }
+export function ActionError(message) {
+  // A plain function, not a class: the error is a real Error (own message and stack) wearing this prototype.
+  const error = new Error(message);
+  Object.setPrototypeOf(error, ActionError.prototype);
+  return error;
 }
+ActionError.prototype = Object.create(Error.prototype);
+ActionError.prototype.name = 'ActionError';
 
 function requireId(id) {
   if (!UUID_V4.test(id)) throw new ActionError('The request id is not a UUID v4.');

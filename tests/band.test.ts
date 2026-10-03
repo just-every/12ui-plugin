@@ -4,6 +4,9 @@ import { describe, expect, test } from 'claude-code/testing';
 
 import { CREATE, OTHER_RUN_DIR, PANE_ID, RUN_DIR, fakeServer, viewWith, workspaceAnswers } from './fixtures/workspace.ts';
 
+/** What `$.ui.panes` answers while the Design workspace pane is open. */
+const PANE_UP = () => ({ value: [{ id: PANE_ID, title: 'Design workspace', isShown: true, isFocused: false, isPlaced: true }] });
+
 const CREATE_TEXT = JSON.stringify({ schema: '12ui.slate.view/3', runDir: RUN_DIR });
 const ENGINE_BAND = 'The engine\'s own band';
 const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 100, scroll: { offset: 0, bodyRows: 10 } };
@@ -21,6 +24,7 @@ function narrowTerminal(on: any, { seats = false } = {}) {
     opens.push(e);
     return { value: e.focus || seats ? { isPlaced: true } : { isPlaced: false, reason: 'below 144 columns' } };
   });
+  on('ui.panes', PANE_UP);
   on('ui.render', { component: 'AbovePrompt' }, ($$: any, e: any) => $$.ui.resolve(e).Text({ children: ENGINE_BAND }));
   on('ui.toast', ($$: unknown, e: any) => { toasts.push(e.text); return { value: undefined }; });
   on('ui.log', () => ({ value: undefined }));

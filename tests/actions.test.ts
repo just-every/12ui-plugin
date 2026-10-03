@@ -6,6 +6,9 @@ import { describe, expect, mock, test } from 'claude-code/testing';
 
 import { CREATE, OTHER_RUN_DIR, PANE_ID, PANE_PROPS, ROUND_OP, RUN_DIR, SHOW, fakeServer, serverIdsView, viewWith, workspaceAnswers } from './fixtures/workspace.ts';
 
+/** What `$.ui.panes` answers while the Design workspace pane is open. */
+const PANE_UP = () => ({ value: [{ id: PANE_ID, title: 'Design workspace', isShown: true, isFocused: false, isPlaced: true }] });
+
 const CREATE_TEXT = JSON.stringify({ schema: '12ui.slate.view/3', runDir: RUN_DIR });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -15,6 +18,7 @@ async function session($: any, on: any, answers: Record<string, any>) {
   const submitted: string[] = [];
   on('http.fetch', ($$: unknown, e: any) => server.answer(e.init));
   on('ui.open', () => ({ value: { isPlaced: true } }));
+  on('ui.panes', PANE_UP);
   on('ui.blit', () => ({ value: {} }));
   on('ui.log', () => ({ value: undefined }));
   on('prompt.submit', ($$: unknown, e: any) => { submitted.push(e.text); return { text: e.text }; });
@@ -317,6 +321,7 @@ describe('actions.test.ts', () => {
       return server.answer(e.init);
     });
     on('ui.open', () => ({ value: { isPlaced: true } }));
+    on('ui.panes', PANE_UP);
     on('ui.blit', () => ({ value: {} }));
     on('ui.log', () => ({ value: undefined }));
     on('prompt.submit', ($$: unknown, e: any) => ({ text: e.text }));

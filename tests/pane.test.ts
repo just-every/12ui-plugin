@@ -4,14 +4,18 @@ import { describe, expect, mock, test } from 'claude-code/testing';
 
 import { CREATE, OTHER_RUN_DIR, PANE_ID, PANE_PROPS, RUN_DIR, SHOW, fakeServer, serverIdsView, viewWith, workspaceAnswers } from './fixtures/workspace.ts';
 
+/** What `$.ui.panes` answers while the Design workspace pane is open. */
+const PANE_UP = () => ({ value: [{ id: PANE_ID, title: 'Design workspace', isShown: true, isFocused: false, isPlaced: true }] });
+
 const CREATE_TEXT = JSON.stringify({ schema: '12ui.slate.view/3', runDir: RUN_DIR });
 
 /** A session that draws on `surface`, a create result naming RUN_DIR, and the fake server; returns its calls. */
-async function openWorkspace($: any, on: any, surface: string, answers = workspaceAnswers(() => viewWith())) {
+async function openWorkspace($: any, on: any, surface: string, answers = workspaceAnswers(() => viewWith()), panes: () => unknown = PANE_UP) {
   const server = fakeServer(answers);
   const opened: unknown[] = [];
   on('http.fetch', ($$: unknown, e: any) => server.answer(e.init));
   on('ui.open', ($$: unknown, e: unknown) => { opened.push(e); return { value: { isPlaced: true } }; });
+  on('ui.panes', panes);
   on('ui.log', () => ({ value: undefined }));
   on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));
   on('tool.call', { tool: SHOW }, () => ({ result: { content: [] }, text: 'shown' }));
@@ -211,7 +215,8 @@ describe('pane.test.ts', () => {
     await ui.unmount();
   });
 
-  // The engine raises `ui.close` when the person closes the pane; an inline plugin's close raises the same event here.
+  // The mod hooks no close event: it asks the engine for its panes at each read and tick. A close here raises the engine's
+  // own `ui.close`, and the roster the next ask answers no longer lists the pane.
   const CLOSER = {
     name: 'closer',
     register(on: any) {
@@ -222,16 +227,28 @@ describe('pane.test.ts', () => {
     },
   };
 
-  test('closing the pane stops polling', { plugins: [CLOSER] }, async ($, on) => {
+  async function pollingSession($: any, on: any, closes: boolean) {
     const clock = mock.clock(on, { now: 1000 });
+    let up = true;
     on('ui.blit', () => ({ value: {} }));
-    on('ui.close', () => ({ value: undefined }) as never);
-    const { server } = await openWorkspace($, on, 'terminal');
+    on('ui.close', () => { if (closes) up = false; return { value: undefined } as never; });
+    const { server } = await openWorkspace($, on, 'terminal', undefined, () => (up ? PANE_UP() : { value: [] }));
     const ui = await mountPane($, 'terminal');
     await clock.advance(0);
     await $.command.run({ command: 'close-pane', args: '' } as never);
     await clock.advance(30000);
-    expect(server.calls.filter((call) => call.name === 'design.slate.status')).toHaveLength(1);
+    return { ui, reads: server.calls.filter((call) => call.name === 'design.slate.status').length };
+  }
+
+  test('a pane that is gone stops polling at the next tick', { plugins: [CLOSER] }, async ($, on) => {
+    const { ui, reads } = await pollingSession($, on, true);
+    expect(reads).toBe(1);
+    await ui.unmount();
+  });
+
+  test('a pane that is up keeps polling while an option runs (paired with the test above)', { plugins: [CLOSER] }, async ($, on) => {
+    const { ui, reads } = await pollingSession($, on, false);
+    expect(reads).toBeGreaterThan(1);
     await ui.unmount();
   });
 
@@ -239,6 +256,7 @@ describe('pane.test.ts', () => {
     const clock = mock.clock(on, { now: 1000 });
     on('http.fetch', () => ({ deny: 'web fetch is off for this organization' }));
     on('ui.open', () => ({ value: { isPlaced: true } }));
+    on('ui.panes', PANE_UP);
     on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));
     on('tool.call', { tool: SHOW }, () => ({ result: { content: [] }, text: 'shown' }));
     await $.tool.call({ tool: CREATE, concept: 'x' } as never);
@@ -268,6 +286,7 @@ describe('pane.test.ts', () => {
     let opens = 0;
     on('http.fetch', ($$: unknown, e: any) => server.answer(e.init));
     on('ui.open', () => { opens += 1; return { value: { isPlaced: true } }; });
+    on('ui.panes', PANE_UP);
     on('prompt.submit', ($$: unknown, e: any) => { submitted.push(e.text); return { text: e.text }; });
     on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));
     on('tool.call', { tool: SHOW }, () => ({ result: { content: [] }, text: 'shown' }));
@@ -298,6 +317,7 @@ describe('pane.test.ts', () => {
     const created = { text: CREATE_TEXT };
     on('http.fetch', ($$: unknown, e: any) => server.answer(e.init));
     on('ui.open', () => ({ value: { isPlaced: true } }));
+    on('ui.panes', PANE_UP);
     on('ui.blit', () => ({ value: {} }));
     on('ui.log', () => ({ value: undefined }));
     on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: created.text }));
@@ -349,6 +369,7 @@ describe('pane.test.ts', () => {
       return server.answer(e.init);
     });
     on('ui.open', () => ({ value: { isPlaced: true } }));
+    on('ui.panes', PANE_UP);
     on('ui.blit', () => ({ value: {} }));
     on('ui.log', () => ({ value: undefined }));
     on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));
@@ -410,6 +431,7 @@ describe('pane.test.ts', () => {
       return server.answer(e.init);
     });
     on('ui.open', () => ({ value: { isPlaced: true } }));
+    on('ui.panes', PANE_UP);
     on('ui.blit', () => ({ value: {} }));
     on('ui.log', () => ({ value: undefined }));
     on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));
@@ -489,6 +511,7 @@ describe('pane.test.ts', () => {
       const server = twoServerWorkspaces('drawn');
       on('http.fetch', ($$: unknown, e: any) => server.answer(e.init));
       on('ui.open', () => ({ value: { isPlaced: true } }));
+      on('ui.panes', PANE_UP);
       on('ui.blit', () => ({ value: {} }));
       on('ui.log', () => ({ value: undefined }));
       on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));
@@ -518,6 +541,7 @@ describe('pane.test.ts', () => {
     const server = twoServerWorkspaces('missing');
     on('http.fetch', ($$: unknown, e: any) => server.answer(e.init));
     on('ui.open', () => ({ value: { isPlaced: true } }));
+    on('ui.panes', PANE_UP);
     on('ui.blit', () => ({ value: {} }));
     on('ui.log', () => ({ value: undefined }));
     on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));
@@ -542,6 +566,7 @@ describe('pane.test.ts', () => {
     const server = twoServerWorkspaces('missing');
     on('http.fetch', ($$: unknown, e: any) => server.answer(e.init));
     on('ui.open', () => ({ value: { isPlaced: true } }));
+    on('ui.panes', PANE_UP);
     on('ui.blit', () => ({ value: {} }));
     on('ui.log', () => ({ value: undefined }));
     on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));

@@ -131,11 +131,33 @@ function stopTicker() {
   ticker = null;
 }
 
+/** Whether the Design workspace pane is still on screen: the person closing it raises nothing a hook sees, so this asks. */
+async function paneIsUp($) {
+  return (await $.ui.panes()).some((pane) => pane.id === PANE_ID);
+}
+
+/** The pane is gone: nothing polls, ticks or waits for it any more. */
+function paneGone() {
+  poll.isOpen = false;
+  paneWaits = false;
+  stopPolling();
+  stopTicker();
+}
+
+/** One tick of the start countdown: a redraw while the pane is up, and the end of the clocks once it is gone. */
+async function tickWhileUp($) {
+  if (!(await paneIsUp($))) {
+    paneGone();
+    return;
+  }
+  $.ui.invalidate('ui.render');
+}
+
 function syncTicker($) {
   const entry = views.get(current);
   const countdown = entry ? countdownOf(entry.view, entry.receivedAtMs) : null;
   if (poll.isOpen && countdown && countdown.state === 'countdown') {
-    if (!ticker) ticker = $.clock.every(1000, () => $.ui.invalidate('ui.render'));
+    if (!ticker) ticker = $.clock.every(1000, () => { void tickWhileUp($); });
   } else stopTicker();
 }
 
@@ -161,6 +183,10 @@ function readSoon($) {
  * the switch asked for found this one still out and was dropped).
  */
 async function refresh($) {
+  if (!(await paneIsUp($))) {
+    paneGone();
+    return;
+  }
   const runDir = current;
   if (!runDir || poll.busy) return;
   poll.busy = true;
@@ -588,14 +614,6 @@ export function register(on) {
       }
     }
     return result;
-  });
-
-  on('ui.close', { id: 'design-workspace' }, async ($, e, next) => {
-    poll.isOpen = false;
-    paneWaits = false;
-    stopPolling();
-    stopTicker();
-    return next(e);
   });
 
   // Matched on every Pane, as design 3.7 spells the hook; only this mod's own pane is drawn here, and any other pane goes
