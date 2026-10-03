@@ -6,7 +6,7 @@ Your agent runs the 12ui command line once per request, which draws every option
 
 Works in Claude Code on a computer with Node.js; your agent installs the 12ui command line once. Drawing needs Codex signed in with ChatGPT on the same computer; without it nothing is drawn and each option shows the reason. The pane needs Claude Code 2.1.287 or later, in the terminal or the Desktop app's Code tab. The draw command reaches design.12ui.com, and Claude Code asks you to approve it.
 
-Version 0.2.90. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
+Version 0.2.91. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
 
 ## Requirements
 
@@ -92,13 +92,14 @@ Calls it makes, each with its purpose:
 | --- | --- | --- | --- |
 | jpeg-js decoder | 0.4.4 | Apache-2.0 (file header); BSD-3-Clause (package) | https://github.com/jpeg-js/jpeg-js |
 
-## Codex plugin and API contracts
+## Codex plugin
 
-Public, installable distribution of the `12ui-design` skill and API contracts. Its shared skill uses the capability-checked
-`12ui` CLI for local execution. The hosted service and documentation live at [12ui.com](https://12ui.com/).
+The `12ui-design` skill as a Codex plugin. The skill uses the `12ui` command
+line for local work. The hosted service and its documentation live at
+[12ui.com](https://12ui.com/).
 
 This repository is generated from the private 12ui implementation at the exact
-`@12ui/design` release revision. Version **0.2.90** matches the npm package.
+`@12ui/design` release revision. Version **0.2.91** matches the npm package.
 
 ### Install as a Codex plugin
 
@@ -127,44 +128,30 @@ npx -y @12ui/design skill install
 That installer places only `12ui-design`; recognized historical `design`
 bundles are retired, while locally modified copies are preserved.
 
-### Manual directory upload
-
-Each GitHub release attaches `12ui-design-0.2.90.zip`, a validated
-skills-only plugin archive with the manifest and skill at the archive root.
-The archive places the shared skill at `skills/12ui-design/`; execution lives in the matching CLI.
-It is suitable for the OpenAI Plugins Directory manual upload flow.
-
 ### Skill
 
-[`12ui-design`](./skills/12ui-design/SKILL.md) is installed byte-identically for every supported client. The CLI selects execution engines.
+[`12ui-design`](./skills/12ui-design/SKILL.md) is installed byte-identically
+for every supported client. Run `12ui capabilities` to see what the installed
+command line supports before a run.
 
-### Public API contracts
+### Documentation
 
-- [`convert-v1.openapi.yaml`](./docs/convert-v1.openapi.yaml)
-- [`create-v1.openapi.yaml`](./docs/create-v1.openapi.yaml)
-- [`corpus-v1.openapi.yaml`](./docs/corpus-v1.openapi.yaml)
-- [`CONVERSION_PACKAGES.md`](./docs/CONVERSION_PACKAGES.md)
-- [`EXPORT_FORMATS.md`](./docs/EXPORT_FORMATS.md)
+- Command line: [12ui.com/cli](https://12ui.com/cli)
+- Skill: [12ui.com/skill](https://12ui.com/skill)
+- API: [12ui.com/api](https://12ui.com/api)
 
-Draft, corpus, and branch image generation use the public `https://12ui.com`
-API. Codex conversion and existing-application edits use `12ui convert` and
-`12ui improve --apply` with an authenticated Codex CLI. Check `12ui capabilities`
-for local conversion, project apply, and export support before execution. For a new local run, image execution defaults to external when `OPENAI_API_KEY` is
-available, otherwise native through Codex account access. Explicit choices and
-saved runs keep their backend; external requires the separate key before inference. Native output formats remain explicit API features. Branch execution uses the CLI engine selection for conversion. Local React export is
-full-page JSX, not application behavior. Credentials are never included in this
-repository.
+### Manual directory upload
 
-The approved light and dark 512px PNG artwork in [`assets/`](./assets/) is
-copied byte-for-byte for every generated release. Use
-[`DIRECTORY-LISTING.md`](./DIRECTORY-LISTING.md) for the full-bundle manual
-submission fields, including its dark-composer selection.
+Each GitHub release attaches `12ui-design-0.2.91.zip`, the validated
+plugin with the manifest and skill at the archive root, and
+`12ui-design-0.2.91-openai.zip`, its skills-only form for the OpenAI
+Plugins Directory manual upload flow.
 
 ### Provenance
 
 Every release is generated from a fixed allowlist, validated for exact skill,
-icon, manifest, marketplace, and contract parity, packaged as a zip, tagged
-`design-v0.2.90`, and published only after the matching npm release
+icon, manifest, and marketplace parity, packaged as a zip, tagged
+`design-v0.2.91`, and published only after the matching npm release
 completes. Do not edit generated files directly; changes must originate in the
 12ui release source.
 

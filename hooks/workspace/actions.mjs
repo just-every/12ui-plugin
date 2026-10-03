@@ -17,18 +17,20 @@ export const EDIT_PROMPT_MAX_BYTES = 6000;
 /** The longest prompt Continue sends (the screen's cut). */
 export const BRIEF_MAX_CHARS = 2000;
 
-/** A request the pane cannot send as it stands, with the words it shows. */
-export function ActionError(message) {
-  // A plain function, not a class: the error is a real Error (own message and stack) wearing this prototype.
+/** A request the pane cannot send as it stands, with the words it shows: a plain Error named `ActionError`. */
+export function actionError(message) {
   const error = new Error(message);
-  Object.setPrototypeOf(error, ActionError.prototype);
+  error.name = 'ActionError';
   return error;
 }
-ActionError.prototype = Object.create(Error.prototype);
-ActionError.prototype.name = 'ActionError';
+
+/** Whether an error is one `actionError` made. */
+export function isActionError(error) {
+  return Boolean(error) && error.name === 'ActionError';
+}
 
 function requireId(id) {
-  if (!UUID_V4.test(id)) throw new ActionError('The request id is not a UUID v4.');
+  if (!UUID_V4.test(id)) throw actionError('The request id is not a UUID v4.');
   return id;
 }
 
@@ -58,9 +60,9 @@ export function convertHandoffArgs(runDir, handoffId, versionId) {
 /** `design.slate.run`: new options, `count` of MORE_COUNTS, an optional steer note. */
 export function runNewArgs(runDir, opId, { count = MORE_COUNT_INITIAL, note = '' } = {}) {
   const n = Number(count);
-  if (!MORE_COUNTS.includes(n)) throw new ActionError(`Choose ${MORE_COUNTS.join(', ')} options.`);
+  if (!MORE_COUNTS.includes(n)) throw actionError(`Choose ${MORE_COUNTS.join(', ')} options.`);
   const words = cleanText(note);
-  if (words.length > NOTE_MAX_CHARS) throw new ActionError(`The note is longer than ${NOTE_MAX_CHARS} characters.`);
+  if (words.length > NOTE_MAX_CHARS) throw actionError(`The note is longer than ${NOTE_MAX_CHARS} characters.`);
   const action = { kind: 'round', mode: 'new', count: n };
   if (words) action.note = words;
   return { runDir, opId: requireId(opId), action };
@@ -74,8 +76,8 @@ export function runLikeArgs(runDir, opId, fromVersionId) {
 /** `design.slate.run`: edit one version with an instruction in words (the pane has no drawing). */
 export function runEditArgs(runDir, opId, versionId, prompt) {
   const words = cleanText(prompt);
-  if (!words) throw new ActionError('Say what to change.');
-  if (utf8Bytes(words) > EDIT_PROMPT_MAX_BYTES) throw new ActionError('The change is too long to send.');
+  if (!words) throw actionError('Say what to change.');
+  if (utf8Bytes(words) > EDIT_PROMPT_MAX_BYTES) throw actionError('The change is too long to send.');
   return { runDir, opId: requireId(opId), action: { kind: 'edit', versionId, prompt: words } };
 }
 
@@ -96,7 +98,7 @@ export function holdArgs(runDir, roundOpId) {
 /** `design.slate.inspire`: search the reference collection with the prompt's words. */
 export function inspireArgs(runDir, query, count) {
   const words = cleanText(query);
-  if (!words) throw new ActionError('Describe the design first.');
+  if (!words) throw actionError('Describe the design first.');
   return { runDir, query: words, count };
 }
 
@@ -119,7 +121,7 @@ export function branchPages(text) {
  * product's other pages, the person's names when given (`pages` only travels with `site`).
  */
 export function runBranchArgs(runDir, opId, fromVersionId, scope, pagesText = '') {
-  if (!BRANCH_SCOPES.includes(scope)) throw new ActionError('Choose Full page or More pages.');
+  if (!BRANCH_SCOPES.includes(scope)) throw actionError('Choose Full page or More pages.');
   const action = { kind: 'round', mode: 'branch', fromVersionId, scope };
   const pages = scope === 'site' ? branchPages(pagesText) : [];
   if (pages.length > 0) action.pages = pages;

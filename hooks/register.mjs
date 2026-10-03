@@ -14,7 +14,7 @@
  * counts down. Nothing else: the mod reads nothing from the computer, runs nothing and touches no other tool's calls.
  */
 
-import { ActionError, continueArgs, convertHandoffArgs, holdArgs, inspireArgs, pickArgs, runBranchArgs, runEditArgs, runNewArgs } from './workspace/actions.mjs';
+import { continueArgs, convertHandoffArgs, holdArgs, inspireArgs, isActionError, pickArgs, runBranchArgs, runEditArgs, runNewArgs } from './workspace/actions.mjs';
 import { uuidV4 } from './workspace/bytes.mjs';
 import { LOADING, NO_ROUND_WAITING, NO_WORKSPACE, PANE_ID, PANE_TITLE, READY_TOAST, RECORDED_RUNNER, SENT } from './workspace/copy.mjs';
 import { PER_ROUND, SEARCH_COUNT, inspirationIds, perRoundOf, pickLimit, picksOf, referenceSize, sameList, siteItems, togglePick, twelveDraws, waitingRound } from './workspace/gallery.mjs';
@@ -24,7 +24,7 @@ import { bandTree, paneTree } from './workspace/pane.mjs';
 import { pictureMaxRows, tileGrid } from './workspace/layout.mjs';
 import { blitSaysAlt, decodeThumb, desktopPictureSize, imageSource, pictureKind, rasterCells, svgPicture, tileBox, useCellsFor } from './workspace/picture.mjs';
 import { nextStep, pollDelay, retriesFirstRead, wantsPolling } from './workspace/poll.mjs';
-import { TOOLS, WorkspaceError, errorLine, imageBlock, mendsOnRetry, readRpc, rpcBody } from './workspace/transport.mjs';
+import { TOOLS, errorLine, imageBlock, isWorkspaceError, mendsOnRetry, readRpc, rpcBody, workspaceError } from './workspace/transport.mjs';
 import { briefLine, countdownLine, countdownOf, findOp, hasRunning, isView, labelOfVersion, opWaitsOnPerson, shownVersionIds, tilesOf } from './workspace/view.mjs';
 
 // ---- the session's state: module memory, as the hosted screen keeps it (a reload starts over) ----
@@ -113,7 +113,7 @@ async function fetchThumb($, slot, tool, args) {
   try {
     const { content } = await rpc($, tool, args);
     const block = imageBlock(content);
-    if (!block) throw new WorkspaceError('No picture came back.');
+    if (!block) throw workspaceError('No picture came back.');
     thumbs.set(slot, { state: 'ready', jpeg: block.data, mimeType: block.mimeType, cache: new Map() });
   } catch (error) {
     thumbs.set(slot, { state: 'failed', reason: errorLine(error) });
@@ -311,10 +311,10 @@ async function record($, slot, work) {
     await work();
     drafts.delete(slot);
   } catch (error) {
-    actionError = error instanceof ActionError ? error.message : errorLine(error);
+    actionError = isActionError(error) ? error.message : errorLine(error);
     // A request the server answered and refused is done with: the next try is a new request. One that may not have
     // reached it (no answer, or a retryable status) keeps its id, so trying again cannot record it twice.
-    if (error instanceof WorkspaceError && !error.retryable) drafts.delete(slot);
+    if (isWorkspaceError(error) && !error.retryable) drafts.delete(slot);
   } finally {
     inFlight.delete(slot);
     $.ui.invalidate('ui.render');

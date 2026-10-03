@@ -18,58 +18,52 @@ const B_VE = 2, B_HE = 3, B_RD = 4, B_VR = 5, B_LD = 6, B_VL = 7, B_HD = 8, B_HU
 // The 4x4 mode tree, as libwebp spells it: a leaf is minus the mode.
 const YMODES_INTRA4 = [-0, 1, -1, 2, -2, 3, 4, 6, -3, 5, -4, -5, -6, 7, -7, 8, -8, -9];
 
-function BoolDecoder(buf, start, end) {
-  this.buf = buf;
-  this.pos = start;
-  this.end = end;
-  this.value = (this.byte() << 8) | this.byte();
-  this.range = 255;
-  this.count = 0;
-}
+/** RFC 6386's boolean entropy decoder over `buf[start, end)`: a closure holding its state, returning its readers. */
+function boolDecoder(buf, start, end) {
+  let pos = start;
+  const byte = () => (pos < end ? buf[pos++] : 0);
+  let value = (byte() << 8) | byte();
+  let range = 255;
+  let count = 0;
 
-BoolDecoder.prototype = {
-  byte() {
-    return this.pos < this.end ? this.buf[this.pos++] : 0;
-  },
-
-  bit(prob) {
-    const split = 1 + (((this.range - 1) * prob) >> 8);
+  const bit = (prob) => {
+    const split = 1 + (((range - 1) * prob) >> 8);
     const big = split << 8;
-    let bit;
-    if (this.value >= big) {
-      bit = 1;
-      this.range -= split;
-      this.value -= big;
+    let result;
+    if (value >= big) {
+      result = 1;
+      range -= split;
+      value -= big;
     } else {
-      bit = 0;
-      this.range = split;
+      result = 0;
+      range = split;
     }
-    while (this.range < 128) {
-      this.value <<= 1;
-      this.range <<= 1;
-      if (++this.count === 8) {
-        this.count = 0;
-        this.value |= this.byte();
+    while (range < 128) {
+      value <<= 1;
+      range <<= 1;
+      if (++count === 8) {
+        count = 0;
+        value |= byte();
       }
     }
-    return bit;
-  },
+    return result;
+  };
 
-  literal(bits) {
+  const literal = (bits) => {
     let v = 0;
-    while (bits-- > 0) v = (v << 1) | this.bit(128);
+    while (bits-- > 0) v = (v << 1) | bit(128);
     return v;
-  },
+  };
 
-  signed(bits) {
-    const v = this.literal(bits);
-    return this.bit(128) ? -v : v;
-  },
+  const signed = (bits) => {
+    const v = literal(bits);
+    return bit(128) ? -v : v;
+  };
 
-  optionalSigned(bits) {
-    return this.bit(128) ? this.signed(bits) : 0;
-  },
-};
+  const optionalSigned = (bits) => (bit(128) ? signed(bits) : 0);
+
+  return { bit, literal, signed, optionalSigned };
+}
 
 const clip = (v, max) => (v < 0 ? 0 : v > max ? max : v);
 const clip8 = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
@@ -527,7 +521,7 @@ export function decodeWebp(bytes) {
   const height = (bytes[start + 8] | (bytes[start + 9] << 8)) & 0x3fff;
   if (!width || !height) throw new Error('empty VP8 frame');
   const firstStart = start + 10;
-  const br = new BoolDecoder(bytes, firstStart, firstStart + firstSize);
+  const br = boolDecoder(bytes, firstStart, firstStart + firstSize);
   const hdr = {};
   parseHeader(br, hdr);
   const { seg, filter } = hdr;
@@ -538,10 +532,10 @@ export function decodeWebp(bytes) {
   for (let p = 0; p < lastPart; p++) {
     const at = firstStart + firstSize + 3 * p;
     const psize = bytes[at] | (bytes[at + 1] << 8) | (bytes[at + 2] << 16);
-    parts.push(new BoolDecoder(bytes, partStart, Math.min(end, partStart + psize)));
+    parts.push(boolDecoder(bytes, partStart, Math.min(end, partStart + psize)));
     partStart += psize;
   }
-  parts.push(new BoolDecoder(bytes, partStart, end));
+  parts.push(boolDecoder(bytes, partStart, end));
   const quant = quantFor(br, seg);
   br.bit(128); // refresh entropy probabilities (one frame only)
   const proba = Uint8Array.from(COEFF_PROBA0);

@@ -1,6 +1,6 @@
 {
   "name": "12ui-design",
-  "version": "0.2.90",
+  "version": "0.2.91",
   "description": "Search real design references, draft visual directions, expand an approved design into complete pages, and convert finished images into production-ready code.",
   "author": {
     "name": "12ui",
@@ -44,12 +44,6 @@
     "brandColor": "#0F172A",
     "composerIcon": "./assets/12ui-icon.png",
     "logo": "./assets/12ui-icon.png",
-    "logoDark": "./assets/12ui-icon-dark.png",
-    "screenshots": [
-      "./assets/screenshots/screenshot-1.png",
-      "./assets/screenshots/screenshot-2.png",
-      "./assets/screenshots/screenshot-3.png",
-      "./assets/screenshots/screenshot-4.png"
-    ]
+    "logoDark": "./assets/12ui-icon-dark.png"
   }
 }

@@ -32,16 +32,19 @@ export function rpcBody(name, args) {
 }
 
 /** An answer the pane shows as its error line: the server's or the transport's own words, verbatim. */
-export function WorkspaceError(message, { code = null, status = null, retryable = false } = {}) {
+export function workspaceError(message, { code = null, status = null, retryable = false } = {}) {
   const error = new Error(message);
-  Object.setPrototypeOf(error, WorkspaceError.prototype);
+  error.name = 'WorkspaceError';
   error.code = code;
   error.status = status;
   error.retryable = retryable;
   return error;
 }
-WorkspaceError.prototype = Object.create(Error.prototype);
-WorkspaceError.prototype.name = 'WorkspaceError';
+
+/** Whether an error is one `workspaceError` made: a server answer, as opposed to no answer at all. */
+export function isWorkspaceError(error) {
+  return Boolean(error) && error.name === 'WorkspaceError';
+}
 
 function firstText(content) {
   if (!Array.isArray(content)) return '';
@@ -50,7 +53,7 @@ function firstText(content) {
 }
 
 /**
- * The tool result of one `$.http.fetch` answer: `{ structured, content }`, or a thrown WorkspaceError carrying the
+ * The tool result of one `$.http.fetch` answer: `{ structured, content }`, or a thrown workspaceError carrying the
  * HTTP status, the JSON-RPC error, or the tool's own `isError` text ("code: message") verbatim.
  */
 export function readRpc(response) {
@@ -66,23 +69,23 @@ export function readRpc(response) {
     const serverWords = body && typeof body.error === 'string' ? body.error
       : body && body.error && typeof body.error.message === 'string' ? body.error.message
         : text.trim().slice(0, 300);
-    throw new WorkspaceError(`design.12ui.com answered ${status ?? 'nothing'}${serverWords ? `: ${serverWords}` : ''}`, {
+    throw workspaceError(`design.12ui.com answered ${status ?? 'nothing'}${serverWords ? `: ${serverWords}` : ''}`, {
       status,
       code: status === 429 ? 'rate_limited' : null,
       retryable: status === 429 || (status !== null && status >= 500),
     });
   }
-  if (!body || typeof body !== 'object') throw new WorkspaceError('design.12ui.com sent an answer that is not JSON', { status });
+  if (!body || typeof body !== 'object') throw workspaceError('design.12ui.com sent an answer that is not JSON', { status });
   if (body.error) {
     const message = typeof body.error.message === 'string' ? body.error.message : 'the request was refused';
-    throw new WorkspaceError(message, { status, code: body.error.code ?? null });
+    throw workspaceError(message, { status, code: body.error.code ?? null });
   }
   const result = body.result;
-  if (!result || typeof result !== 'object') throw new WorkspaceError('design.12ui.com sent an answer with no result', { status });
+  if (!result || typeof result !== 'object') throw workspaceError('design.12ui.com sent an answer with no result', { status });
   const structured = result.structuredContent && typeof result.structuredContent === 'object' ? result.structuredContent : null;
   if (result.isError) {
     const words = firstText(result.content) || (structured && typeof structured.message === 'string' ? structured.message : 'the request failed');
-    throw new WorkspaceError(words, {
+    throw workspaceError(words, {
       status,
       code: structured && typeof structured.code === 'string' ? structured.code : null,
       retryable: Boolean(structured && structured.retryable),
@@ -98,12 +101,12 @@ export function imageBlock(content) {
 }
 
 /**
- * Whether a later read can mend a failed call: a WorkspaceError the server marked retryable (a 429, a 5xx, a tool result
+ * Whether a later read can mend a failed call: a workspaceError the server marked retryable (a 429, a 5xx, a tool result
  * with `retryable: true`), or no answer at all (`$.http.fetch` refused or failed). A refusal the server answered, such as
  * `unknown_workspace`, is final.
  */
 export function mendsOnRetry(error) {
-  return error instanceof WorkspaceError ? error.retryable : true;
+  return isWorkspaceError(error) ? error.retryable : true;
 }
 
 /** The line the pane shows when `$.http.fetch` itself was refused or failed (no answer from the server at all). */
@@ -114,5 +117,5 @@ export function unreachableLine(error) {
 
 /** The pane's error line for any failure of a call: a server answer verbatim, or the unreachable line. */
 export function errorLine(error) {
-  return error instanceof WorkspaceError ? error.message : unreachableLine(error);
+  return isWorkspaceError(error) ? error.message : unreachableLine(error);
 }
