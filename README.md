@@ -2,18 +2,19 @@
 
 Open a Design workspace in Claude Code: a pane that shows design options for an app or a website as images. Select the one you like, ask for more options, ask for a change to an option with a note, and hand an option off to be built.
 
-Your agent runs the 12ui command line once per request, which draws every option at once with your own Codex sign-in and image generation, and adds each option to the workspace as it finishes. Your agent never draws in the conversation. Drawing, editing and Build this need no 12ui account: a workspace is reached through a private handle held in your session. Branching a design into more screens asks you to sign in to 12ui. Images are stored for up to 30 days and removed after 14 days without use.
+Your agent runs the 12ui command line once per request, which draws every option at once with your own Codex sign-in and image generation, and adds each option to the workspace as it finishes. Your agent never draws in the conversation. Drawing, editing, branching and Build this need no 12ui account: branching plans and draws the new screens with your own Codex too, and a workspace is reached through a private handle held in your session. Images are stored for up to 30 days and removed after 14 days without use.
 
 Works in Claude Code on a computer with Node.js; your agent installs the 12ui command line once. Drawing needs Codex signed in with ChatGPT on the same computer; without it nothing is drawn and each option shows the reason. The pane needs Claude Code 2.1.287 or later, in the terminal or the Desktop app's Code tab. The draw command reaches design.12ui.com, and Claude Code asks you to approve it.
 
-Version 0.2.91. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
+Version 0.2.92. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
 
 ## Requirements
 
 - Claude Code in the terminal or in the Desktop app's Code tab, with Node.js. The agent installs the 12ui command line once with `npx -y @12ui/design cli install`.
 - The pane needs Claude Code 2.1.287 or later.
 - Drawing needs Codex signed in with ChatGPT on the same computer.
-- Draft, branch and hosted conversion need a 12ui account (`12ui auth login`).
+- Branch also runs on your own Codex: with Codex signed in with ChatGPT it plans and draws the new screens there and needs no 12ui account.
+- Draft, hosted conversion and the hosted branch service (used when Codex is not ready) need a 12ui account (`12ui auth login`).
 
 ## What this plugin runs, sends and fetches
 
@@ -99,7 +100,7 @@ line for local work. The hosted service and its documentation live at
 [12ui.com](https://12ui.com/).
 
 This repository is generated from the private 12ui implementation at the exact
-`@12ui/design` release revision. Version **0.2.91** matches the npm package.
+`@12ui/design` release revision. Version **0.2.92** matches the npm package.
 
 ### Install as a Codex plugin
 
@@ -142,16 +143,16 @@ command line supports before a run.
 
 ### Manual directory upload
 
-Each GitHub release attaches `12ui-design-0.2.91.zip`, the validated
+Each GitHub release attaches `12ui-design-0.2.92.zip`, the validated
 plugin with the manifest and skill at the archive root, and
-`12ui-design-0.2.91-openai.zip`, its skills-only form for the OpenAI
+`12ui-design-0.2.92-openai.zip`, its skills-only form for the OpenAI
 Plugins Directory manual upload flow.
 
 ### Provenance
 
 Every release is generated from a fixed allowlist, validated for exact skill,
 icon, manifest, and marketplace parity, packaged as a zip, tagged
-`design-v0.2.91`, and published only after the matching npm release
+`design-v0.2.92`, and published only after the matching npm release
 completes. Do not edit generated files directly; changes must originate in the
 12ui release source.
 
