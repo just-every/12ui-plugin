@@ -49,15 +49,15 @@ The same opt-in is available as `12ui prototype <run-dir> --polish`.
 
 For a single approved image, convert directly rather than branching.
 
-    12ui convert <source-image> --output html --engine api --out-dir <run-dir>
+    12ui convert <source-image> --output html --out-dir <run-dir>
 
-`--engine api` is 12ui's structured conversion, the same as the web Convert page: a LayerDoc of the image's layers, then responsive HTML with its real assets. Keep `convert` running in the foreground until it exits. If the client returns a running shell or background task handle, keep waiting on that same handle; use `12ui next <run-dir> --wait` to observe progress while the original process stays alive. Do not deliver a final response until the command has exited and the saved run reports a terminal result. If it reports `needs-reconciliation`, preserve the run and report that state; do not start a fresh conversion or treat `resume` as permission to repeat uncertain paid work.
+When Codex is ready on this machine, the CLI converts locally on the person's own Codex sign-in, with no 12ui account; otherwise it uses the 12ui service. Keep `convert` running in the foreground until it exits. If the client returns a running shell or background task handle, keep waiting on that same handle; use `12ui next <run-dir> --wait` to observe progress while the original process stays alive. Local conversion runs in that process, so ending the client session with work still in flight can interrupt a dispatched model call. Do not deliver a final response until the command has exited and the saved run reports a terminal result. If it reports `needs-reconciliation`, preserve the run and report that state; do not start a fresh conversion or treat `resume` as permission to repeat uncertain paid work.
 
-Use the returned editable HTML/CSS and assets as the implementation baseline. Derive another format from the conversion id it prints, without converting again:
+Use the returned editable HTML/CSS and assets as the implementation baseline. Derive another supported output from the saved run or its output directory:
 
-    12ui convert <conversion-id> --output html_fixed,svg,pdf --out-dir <dir>
+    12ui convert <run-dir-or-output-dir> --output assets|png|jpg|webp|pdf|react --out-dir <dir>
 
-Consult [outputs.md](outputs.md) for the other formats and engines. Keep the run and follow `12ui next <run-dir>` or `12ui resume <run-dir>` for status and recovery.
+LayerDoc is optional. Native design formats and hosted conversion-ID derivations have different requirements; consult [outputs.md](outputs.md) when those are requested. Keep the run and follow `12ui next <run-dir>` or `12ui resume <run-dir>` for status and recovery.
 
 ## 4. Integrate and close
 

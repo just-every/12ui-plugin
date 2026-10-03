@@ -1,12 +1,12 @@
 # 12ui Design
 
-Open a Design workspace in Claude Code: a pane that shows design options for an app or a website as images. Select the one you like, ask for more options with a note, ask for a change to an option with a note, and hand an option off to be built.
+Open a Design workspace in Claude Code: a pane that shows design options for an app or a website as images. Select the one you like, ask for more options, ask for a change to an option with a note, and hand an option off to be built.
 
-Your agent runs the 12ui command line once per request, which draws every option at once with your own Codex sign-in and image generation, and adds each option to the workspace as it finishes. Your agent never draws in the conversation. There is no 12ui account and no sign-in: a workspace is reached through a private handle held in your session. Images are stored for up to 30 days and removed after 14 days without use.
+Your agent runs the 12ui command line once per request, which draws every option at once with your own Codex sign-in and image generation, and adds each option to the workspace as it finishes. Your agent never draws in the conversation. Drawing, editing and Build this need no 12ui account: a workspace is reached through a private handle held in your session. Branching a design into more screens asks you to sign in to 12ui. Images are stored for up to 30 days and removed after 14 days without use.
 
 Works in Claude Code on a computer with Node.js; your agent installs the 12ui command line once. Drawing needs Codex signed in with ChatGPT on the same computer; without it nothing is drawn and each option shows the reason. The pane needs Claude Code 2.1.287 or later, in the terminal or the Desktop app's Code tab. The draw command reaches design.12ui.com, and Claude Code asks you to approve it.
 
-Version 0.2.87. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
+Version 0.2.88. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
 
 ## Requirements
 

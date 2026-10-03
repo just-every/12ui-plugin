@@ -57,10 +57,10 @@ describe('actions.test.ts', () => {
     expect(await ui.find({ key: 'lv-choose' })).toBeUndefined();
     await ui.press({ key: 'lv-build-this' });
     expect(server.calls.filter((call) => call.name === 'design.slate.pick')).toEqual([{ name: 'design.slate.pick', args: { runDir: RUN_DIR, versionId: 'v_a' } }]);
-    // The hand-off is the Codex screen's (remoteChoose): Convert to HTML, engine service (--engine api). It is what puts a waiting
+    // The hand-off is the Codex screen's (remoteChoose): Convert to HTML, engine local. It is what puts a waiting
     // request, its command and an upload token into design.slate.data; the pick alone leaves Claude nothing to build.
     const handoffs = server.calls.filter((call) => call.name === 'design.slate.handoff');
-    expect(handoffs).toEqual([{ name: 'design.slate.handoff', args: { runDir: RUN_DIR, handoffId: expect.stringMatching(UUID), kind: 'convert', versionId: 'v_a', options: { engine: 'service', output: 'html' } } }]);
+    expect(handoffs).toEqual([{ name: 'design.slate.handoff', args: { runDir: RUN_DIR, handoffId: expect.stringMatching(UUID), kind: 'convert', versionId: 'v_a', options: { engine: 'local', output: 'html' } } }]);
     expect(server.calls.map((call) => call.name).filter((name) => name === 'design.slate.pick' || name === 'design.slate.handoff')).toEqual(['design.slate.pick', 'design.slate.handoff']);
     expect(submitted).toEqual([`The user chose design A to build ${MESSAGE_TAIL} (runDir ${RUN_DIR}). Please read its selection with design.slate.data, then build that design as the user's request asks.`]);
     expect(await ui.find({ type: 'Text', text: 'Building' })).toBeDefined();

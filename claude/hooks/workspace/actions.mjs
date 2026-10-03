@@ -46,12 +46,11 @@ export function pickArgs(runDir, versionId) {
 
 /**
  * `design.slate.handoff`: record Build this's Convert hand-off, as the Codex screen's does (remoteChoose): kind
- * `convert`, output `html`, engine `service` (`12ui convert --engine api`, the web Convert page's /api/v1/convert
- * pipeline). It puts a waiting request, with its command and an upload token, into `design.slate.data`; without it
- * Claude has a pick but nothing to build from.
+ * `convert`, output `html`, engine `local`. It puts a waiting request, with its command and an upload token, into
+ * `design.slate.data`; without it Claude has a pick but nothing to build from.
  */
 export function convertHandoffArgs(runDir, handoffId, versionId) {
-  return { runDir, handoffId: requireId(handoffId), kind: 'convert', versionId, options: { engine: 'service', output: 'html' } };
+  return { runDir, handoffId: requireId(handoffId), kind: 'convert', versionId, options: { engine: 'local', output: 'html' } };
 }
 
 /** `design.slate.run`: new options, `count` of MORE_COUNTS, an optional steer note. */
