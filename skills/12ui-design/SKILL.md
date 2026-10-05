@@ -17,7 +17,7 @@ Start where you already are: a new screen or page goes to the Design workspace (
 
     12ui draft --concept "<product, audience, surface, goal, personality, must-keep copy, must-nots>" --corpus-query "<surface, layout, typography, imagery, palette>" --candidates 4 --wait
 
-Add `--reference <path-or-url>` with the brand's logo or lettering, or to carry an existing interface's style into a new page, and `--retain layout` only when its geometry should be preserved.
+Add `--reference <path-or-url> --retain brand,font` with the brand's logo or lettering (its logo and typefaces, never its layout), `--reference` alone to carry an existing interface's style into a new page, and `--retain layout` only when its geometry should be preserved.
 
 Inspect the real candidate images before continuing. When the user is involved, they choose in the Design workspace (§8), never from images in chat, and a contact sheet or images the project asks for come alongside it, never instead; otherwise choose the strongest direction rather than averaging them into a generic compromise.
 
