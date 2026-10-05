@@ -14,8 +14,8 @@ export const MORE_COUNTS = Object.freeze([1, 2, 4, 6, 8, 12]);
 export const MORE_COUNT_INITIAL = 6;
 export const NOTE_MAX_CHARS = 600;
 export const EDIT_PROMPT_MAX_BYTES = 6000;
-/** The longest prompt Continue sends (the screen's cut). */
-export const BRIEF_MAX_CHARS = 2000;
+/** The longest design prompt the server stores (the view contract's SLATE_BRIEF_MAX_CHARACTERS), in characters once whitespace collapses. */
+export const BRIEF_MAX_CHARS = 20000;
 
 /** A request the pane cannot send as it stands, with the words it shows: a plain Error named `ActionError`. */
 export function actionError(message) {
@@ -85,8 +85,11 @@ export function runEditArgs(runDir, opId, versionId, prompt) {
 export function continueArgs(runDir, roundOpId, { referenceIds = null, brief = '' } = {}) {
   const action = { kind: 'continue' };
   if (referenceIds) action.referenceIds = [...referenceIds];
-  const words = cleanText(brief);
-  if (words) action.brief = Array.from(words).slice(0, BRIEF_MAX_CHARS).join('');
+  const words = cleanText(brief).replace(/\s+/g, ' ');
+  // Every word the person wrote is sent, never cut: one over the server's ceiling is refused here with its count.
+  const count = Array.from(words).length;
+  if (count > BRIEF_MAX_CHARS) throw actionError(`The design prompt is ${count} characters; at most ${BRIEF_MAX_CHARS} fit. Shorten it by ${count - BRIEF_MAX_CHARS}.`);
+  if (words) action.brief = words;
   return { runDir, opId: requireId(roundOpId), action };
 }
 
