@@ -6,7 +6,7 @@ Your agent runs the 12ui command line once per request, which draws every option
 
 Works in Claude Code on a computer with Node.js; your agent installs the 12ui command line once. Drawing needs Codex signed in with ChatGPT on the same computer; without it nothing is drawn and each option shows the reason. The pane needs Claude Code 2.1.287 or later, in the terminal or the Desktop app's Code tab. The draw command reaches design.12ui.com, and Claude Code asks you to approve it.
 
-Version 0.2.114. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
+Version 0.2.115. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
 
 ## Requirements
 
@@ -100,7 +100,7 @@ line for local work. The hosted service and its documentation live at
 [12ui.com](https://12ui.com/).
 
 This repository is generated from the private 12ui implementation at the exact
-`@12ui/design` release revision. Version **0.2.114** matches the npm package.
+`@12ui/design` release revision. Version **0.2.115** matches the npm package.
 
 ### Install as a Codex plugin
 
@@ -143,16 +143,16 @@ command line supports before a run.
 
 ### Manual directory upload
 
-Each GitHub release attaches `12ui-design-0.2.114.zip`, the validated
+Each GitHub release attaches `12ui-design-0.2.115.zip`, the validated
 plugin with the manifest and skill at the archive root, and
-`12ui-design-0.2.114-openai.zip`, its skills-only form for the OpenAI
+`12ui-design-0.2.115-openai.zip`, its skills-only form for the OpenAI
 Plugins Directory manual upload flow.
 
 ### Provenance
 
 Every release is generated from a fixed allowlist, validated for exact skill,
 icon, manifest, and marketplace parity, packaged as a zip, tagged
-`design-v0.2.114`, and published only after the matching npm release
+`design-v0.2.115`, and published only after the matching npm release
 completes. Do not edit generated files directly; changes must originate in the
 12ui release source.
 
