@@ -1,8 +1,6 @@
 /**
  * Workspace views and a fake design.12ui.com for the pane tests (`claude plugin test`). Shapes follow
- * `12ui.slate.view/3` (packages/12ui/src/slate-view-contract.ts) as workers/api/src/slate/view.ts projects them. This is
- * the TypeScript twin of `mod/fixtures/workspace.mjs` (the node tests' copy, since Node 22.13 cannot import TypeScript);
- * `mod-fixtures.test.mjs` keeps the two exporting the same data.
+ * `12ui.slate.view/3` (packages/12ui/src/slate-view-contract.ts) as workers/api/src/slate/view.ts projects them.
  */
 
 import { THUMB_HEIGHT, THUMB_JPEG, THUMB_WIDTH } from './thumb.ts';

@@ -1,7 +1,6 @@
 /**
  * A real thumbnail-shaped JPEG: 32 x 18 (a hue ramp, a dark band, a white square), encoded by jpeg-js 0.4.4 at
  * quality 80, the encoder the server makes its thumbnails with (workers/api/src/slate/http/renditions.ts), 4:4:4.
- * The TypeScript twin of `mod/fixtures/thumb.mjs` (the node tests' copy); `mod-fixtures.test.mjs` keeps them equal.
  */
 export const THUMB_JPEG: string =
   '/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYn' +
