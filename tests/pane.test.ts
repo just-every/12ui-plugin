@@ -33,7 +33,8 @@ async function promptValue(ui: any) {
 }
 
 describe('pane.test.ts', () => {
-  test('a create result opens the pane where the session draws', async ($, on) => {
+  // The first test of a file pays the cold mount: 5.2 to 5.6 s on a cold CI runner, past the 5 s default.
+  test('a create result opens the pane where the session draws', { timeoutMs: 30_000 }, async ($, on) => {
     mock.clock(on, { now: 1000 });
     const { opened } = await openWorkspace($, on, 'terminal');
     expect(opened).toEqual([{ id: PANE_ID, title: 'Design workspace' }]);
