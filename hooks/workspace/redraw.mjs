@@ -55,7 +55,9 @@ export function drawnSignature(model) {
     emptyLine: model.emptyLine,
     perRound: model.perRound,
     lv: model.lv ? { tile: { ...model.lv.tile }, picture: pictureFact(model.lv.picture), mode: model.lv.mode, scope: model.lv.scope, pages: model.lv.pages } : null,
-    tiles: model.tiles.map((tile) => ({ ...tile, picture: pictureFact(tile.picture) })),
+    sections: model.sections.map((section) => ({ ...section, groups: section.groups.map((group) => ({ ...group, tiles: group.tiles.map((tile) => ({ ...tile, picture: pictureFact(tile.picture) })) })) })),
+    sketches: model.sketches,
+    selectable: model.selectable,
     items: model.items.map((item) => ({ ...item, picture: pictureFact(item.picture) })),
   });
 }

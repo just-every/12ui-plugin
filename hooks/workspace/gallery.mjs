@@ -4,10 +4,13 @@
  * (workers/api/src/slate/view.ts): `inspiration.searches`, `references`, `sites`, `rounds[].referenceIds` and `pause`.
  */
 
+import { SELECTION_MAX } from './actions.mjs';
+import { sketchesOf } from './sketches.mjs';
 import { shownVersionIds } from './view.mjs';
 
-export const TABS = Object.freeze(['inspiration', 'references', 'designs']);
-export const TAB_LABELS = Object.freeze({ inspiration: 'Inspiration', references: 'References', designs: 'Designs' });
+/** The tabs in flow order, as the hosted screen's: Sketches, Inspiration, References, Designs. */
+export const TABS = Object.freeze(['sketches', 'inspiration', 'references', 'designs']);
+export const TAB_LABELS = Object.freeze({ sketches: 'Sketches', inspiration: 'Inspiration', references: 'References', designs: 'Designs' });
 /** Designs per round: 6 by default, 12 one tap away (the screen's switch). */
 export const PER_ROUND = Object.freeze([6, 12]);
 /** How many references one search asks for (the screen's first page). */
@@ -51,6 +54,16 @@ export function referenceSize(view, id) {
   return { width: 16, height: 10 };
 }
 
+/**
+ * The selection the next round draws from while no round waits: the view's `inspiration.selected` (references,
+ * websites and sketches in click order, at most eight), or the person's own toggles not yet answered (`chosen`).
+ */
+export function selectedOf(view, chosen) {
+  if (chosen) return chosen;
+  const selected = view.inspiration && Array.isArray(view.inspiration.selected) ? view.inspiration.selected : [];
+  return [...selected];
+}
+
 /** The picks of the waiting round: the person's own once they changed them, else the round's preselection. */
 export function picksOf(view, chosen) {
   if (chosen) return chosen;
@@ -65,7 +78,7 @@ export function pickLimit(view) {
 }
 
 /** Adds or removes one pick; past the limit nothing changes and `refused` says so. The order never changes. */
-export function togglePick(picks, id, limit) {
+export function togglePick(picks, id, limit = SELECTION_MAX) {
   const at = picks.indexOf(id);
   if (at >= 0) return { picks: picks.filter((pick) => pick !== id), refused: false };
   if (picks.length >= limit) return { picks, refused: true };
@@ -85,8 +98,8 @@ export function perRoundOf(view, tapped) {
 }
 
 /**
- * The tab the pane opens a workspace on: Inspiration while a round waits for the person's picks (its Select buttons
- * work only then); otherwise Designs once the workspace has options to show; Inspiration when it has none yet.
+ * The tab the pane opens a workspace on: Inspiration while a round waits for the person's picks (the tray with its Continue
+ * is there then); otherwise Designs once the workspace has options to show; Inspiration when it has none yet.
  */
 export function openingTab(view, roundWaits) {
   if (roundWaits) return 'inspiration';
@@ -101,7 +114,8 @@ export function tabThumbs(view, tab) {
   if (tab === 'designs') {
     return shownVersionIds(view).map((versionId) => ({ slot: versionId, kind: 'version', args: { versionId } }));
   }
-  const ids = tab === 'references' ? siteItems(view).map((site) => site.id) : inspirationIds(view);
+  const ids = tab === 'sketches' ? sketchesOf(view).map((sketch) => sketch.id)
+    : tab === 'references' ? siteItems(view).map((site) => site.id) : inspirationIds(view);
   return ids.map((id) => ({ slot: `ref:${id}`, kind: 'reference', args: { referenceId: id } }));
 }
 

@@ -15,8 +15,27 @@ export const BRANCH_PAGES_HINT = 'Pages (optional), e.g. about, sign in, setting
 export const SENT = 'Recorded. Claude has been told.';
 export const RECORDED_RUNNER = 'Recorded. It will be drawn on this computer.';
 
+export const SKETCHES_CAPTION = 'Layout sketches for your brief. A selected sketch leads each group of the next round.';
+export const SKETCH_PATH_HINT = 'Path to your own sketch (JPEG, PNG or WebP)';
+export const SKETCHES_NONE = 'No sketches yet. Add your own, or draw a round.';
+export const SKETCHES_DRAWING = 'Drawing sketches…';
+export const SKETCH_GAP_AFTER = 'No sketches this round, so these were drawn without one.';
+export const SKETCH_GAP_AHEAD = 'No sketches this round, so these will be drawn without one.';
+/** A mixed round's groups, one per technique (the hosted screen's groupSketch words). */
+export const GROUP_NAMES = Object.freeze({ sketch: 'Sketch', inspiration: 'Sketch + inspiration', site: 'Sketch + site' });
+
 export const LABELS = Object.freeze({
   design: 'Design',
+  sketches: 'Sketches',
+  add: 'Add',
+  remove: 'Remove',
+  keep: '♡ Keep',
+  kept: '♥ Kept',
+  retry: 'Retry',
+  simplify: 'Simplify',
+  standard: 'Standard',
+  high: 'High',
+  groupMore: '+ More',
   selected: 'Selected',
   chosen: 'Building',
   back: 'Back',

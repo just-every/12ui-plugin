@@ -20,6 +20,7 @@ export const TOOLS = Object.freeze({
   handoff: 'design.slate.handoff',
   reference: 'design.slate.reference',
   inspire: 'design.slate.inspire',
+  inspiration: 'design.slate.inspiration',
 });
 
 let nextId = 1;

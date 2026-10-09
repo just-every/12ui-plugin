@@ -11,20 +11,23 @@
  * itself. The one network request is the fetch in `rpc`, its address and options written at the call: the plugin's
  * own MCP server. It sends workspace handles, ids, picks and the words typed in the pane, never the conversation.
  * `$.prompt.submit` tells Claude, in one fixed line, what the person clicked; `$.ui.*` draws, `$.clock.*` polls and
- * counts down. Nothing else: the mod reads nothing from the computer, runs nothing and touches no other tool's calls.
+ * counts down. `$.fs.read` reads one picture file, and only when the person types its path in the Sketches tab and presses
+ * Add. Nothing else: the mod reads nothing else from the computer, runs nothing and touches no other tool's calls.
  */
 
-import { continueArgs, convertHandoffArgs, holdArgs, inspireArgs, isActionError, pickArgs, runBranchArgs, runEditArgs, runNewArgs } from './workspace/actions.mjs';
+import { SELECTION_MAX, actionError as refusal, continueArgs, convertHandoffArgs, holdArgs, inspirationArgs, inspireArgs, isActionError, pickArgs, runBranchArgs, runEditArgs, runKeepArgs, runNewArgs, runRetryArgs, runSimplifyArgs } from './workspace/actions.mjs';
 import { uuidV4 } from './workspace/bytes.mjs';
-import { LOADING, NO_WORKSPACE, PANE_ID, PANE_TITLE, READY_TOAST, RECORDED_RUNNER, SENT } from './workspace/copy.mjs';
-import { PER_ROUND, SEARCH_COUNT, inspirationIds, openingTab, perRoundOf, pickLimit, picksOf, referenceSize, sameList, siteItems, tabThumbs, togglePick, twelveDraws, viewThumbs, waitingRound } from './workspace/gallery.mjs';
+import { LOADING, NO_WORKSPACE, PANE_ID, PANE_TITLE, READY_TOAST, RECORDED_RUNNER, SENT, SKETCHES_NONE } from './workspace/copy.mjs';
+import { PER_ROUND, SEARCH_COUNT, inspirationIds, openingTab, perRoundOf, pickLimit, picksOf, referenceSize, sameList, selectedOf, siteItems, tabThumbs, togglePick, twelveDraws, viewThumbs, waitingRound } from './workspace/gallery.mjs';
 import { handleFromCall } from './workspace/handles.mjs';
 import { afterRun, buildMessage, judgeRunner, runMessage } from './workspace/messages.mjs';
 import { bandTree, paneTree } from './workspace/pane.mjs';
 import { pictureMaxRows, tileGrid } from './workspace/layout.mjs';
-import { blitSaysAlt, decodeThumb, desktopPictureSize, imageSource, imageTreeBudget, pictureKind, rasterCells, svgPicture, tileBox, useCellsFor } from './workspace/picture.mjs';
+import { SVG_MAX_CHARS, blitSaysAlt, decodeThumb, desktopPictureSize, imageSource, imageTreeBudget, pictureKind, rasterCells, svgPicture, tileBox, useCellsFor } from './workspace/picture.mjs';
 import { nextStep, pollDelay, retriesFirstRead, wantsPolling } from './workspace/poll.mjs';
 import { drawnSignature, pictureRedrawDelay, pressQuietDelay } from './workspace/redraw.mjs';
+import { designSections } from './workspace/sections.mjs';
+import { isSketchId, sketchName, sketchSize, sketchUpload, sketchesDrawing, sketchesOf, typedPath } from './workspace/sketches.mjs';
 import { TOOLS, errorLine, imageBlock, isWorkspaceError, mendsOnRetry, readRpc, rpcBody, workspaceError } from './workspace/transport.mjs';
 import { briefLine, countdownLine, countdownOf, findOp, hasRunning, isView, labelOfVersion, opWaitsOnPerson, tilesOf } from './workspace/view.mjs';
 
@@ -41,7 +44,10 @@ const inFlight = new Set();
 const runnerWatch = new Map();
 // What the person is doing in the pane: the tab (`openedFor`: the workspace whose opening tab was chosen), the prompt
 // line, the waiting round's picks, the large view.
-const ui = { tab: 'inspiration', autoTab: false, openedFor: null, prompt: '', promptEdited: false, chosen: null, chosenOp: null, heldOp: null, pauseOp: null, lv: null, perRound: null };
+const ui = { tab: 'inspiration', autoTab: false, openedFor: null, prompt: '', promptEdited: false, chosen: null, chosenOp: null, heldOp: null, pauseOp: null, lv: null, perRound: null, keep: {}, sketchPath: '' };
+// The selection the next round draws from while no round waits (references, websites and sketches, at most eight): the
+// person's toggles not yet answered (`ids`, null when the view's own stands), written whole by one request at a time.
+const selection = { ids: null, sending: false };
 const poll = { timer: null, step: 0, busy: false, isOpen: false, failedRetryably: false };
 const blit = { altDrawn: false, toggled: null, probed: false, lastAnswer: null };
 // The pane's own redraws (redraw.mjs): what the last drawing showed (`shows`: the workspace whose view it drew) and for
@@ -148,10 +154,12 @@ function followPause(runDir, view, receivedAtMs) {
 async function fetchThumb($, slot, tool, args) {
   thumbs.set(slot, { state: 'loading' });
   try {
-    const { content } = await rpc($, tool, args);
+    const { content, structured } = await rpc($, tool, args);
     const block = imageBlock(content);
-    if (!block) throw workspaceError('No picture came back.');
-    thumbs.set(slot, { state: 'ready', jpeg: block.data, mimeType: block.mimeType, cache: new Map() });
+    if (block) thumbs.set(slot, { state: 'ready', jpeg: block.data, mimeType: block.mimeType, cache: new Map() });
+    // A model sketch answers its SVG text, not an image (the reference tool, workers/api/src/slate/mcp/handlers/images.ts).
+    else if (structured && typeof structured.svg === 'string') thumbs.set(slot, { state: 'ready', svg: structured.svg, cache: new Map() });
+    else throw workspaceError('No picture came back.');
   } catch (error) {
     thumbs.set(slot, { state: 'failed', reason: errorLine(error) });
   }
@@ -306,6 +314,9 @@ function showWorkspace($, runDir) {
   ui.lv = null;
   ui.pauseOp = null;
   ui.promptEdited = false;
+  ui.keep = {};
+  ui.sketchPath = '';
+  selection.ids = null;
   // Presses on the last workspace's drawing hold back no redraw of this one: what they pressed on is gone.
   redraw.lastPressAtMs = null;
   // No redraw here: its one caller opens the pane next, and that open redraws it.
@@ -374,9 +385,12 @@ function afterRunRecorded($, runDir, opId, message, runner) {
 async function record($, slot, work) {
   if (inFlight.has(slot)) return;
   inFlight.add(slot);
+  // A press whose drawing would be the one already drawn asks for none: every fresh drawing retires the buttons the person
+  // may press next (redraw.mjs), so only a stale error or notice, which the press clears, is drawn away now.
+  const staleWords = Boolean(actionError || noticeText);
   actionError = '';
   noticeText = '';
-  $.ui.invalidate('ui.render');
+  if (staleWords) $.ui.invalidate('ui.render');
   try {
     await work();
     drafts.delete(slot);
@@ -423,10 +437,16 @@ function holdOnce($) {
   }, (error) => { actionError = errorLine(error); $.ui.invalidate('ui.render'); });
 }
 
-/** A pick: offered only while a round waits (pane.mjs); a press on a drawing from before the wait ended does nothing. */
+/**
+ * A pick. While a round waits it is that round's pick (and holds its countdown); otherwise it is a toggle of the
+ * selection the next round draws from, written whole to the server one request at a time.
+ */
 function togglePickOf($, id) {
   const pause = pauseNow();
-  if (!pause) return;
+  if (!pause) {
+    toggleSelection($, id);
+    return;
+  }
   const next = togglePick(pause.picks, id, pickLimit(pause.view));
   if (next.refused) noticeText = `At most ${pickLimit(pause.view)} picks.`;
   else noticeText = '';
@@ -434,6 +454,144 @@ function togglePickOf($, id) {
   ui.chosenOp = pause.countdown.opId;
   holdOnce($);
   $.ui.invalidate('ui.render');
+}
+
+/** The selection as the pane shows it now: the person's unanswered toggles, else the view's. */
+function selectionNow() {
+  const view = viewOf(current);
+  return view ? selectedOf(view, selection.ids) : [];
+}
+
+function toggleSelection($, id) {
+  const next = togglePick(selectionNow(), id, SELECTION_MAX);
+  noticeText = next.refused ? `At most ${SELECTION_MAX} picks.` : '';
+  if (!next.refused) selection.ids = next.picks;
+  $.ui.invalidate('ui.render');
+  if (!next.refused) void flushSelection($);
+}
+
+/** Writes the selection whole, one request in flight; a toggle made meanwhile is sent next, so the last click wins. */
+async function flushSelection($) {
+  if (selection.sending) return;
+  selection.sending = true;
+  const runDir = current;
+  try {
+    while (selection.ids !== null && runDir === current) {
+      const sent = selection.ids;
+      const { structured } = await rpc($, TOOLS.inspiration, inspirationArgs(runDir, sent));
+      if (runDir !== current) break;
+      if (selection.ids !== null && sameList(selection.ids, sent)) selection.ids = null;
+      if (structured && isView(structured.view)) await applyView($, runDir, structured.view);
+    }
+  } catch (error) {
+    selection.ids = null;
+    actionError = errorLine(error);
+    $.ui.invalidate('ui.render');
+  } finally {
+    selection.sending = false;
+  }
+}
+
+/** Retry: a failed option drawn again through its failed round's own request. */
+function retryOption($, tile) {
+  if (!tile.retryOpId) return Promise.resolve();
+  const runDir = current;
+  const slot = workspaceSlot(runDir, 'retry', tile.retryOpId, tile.optionLabel);
+  return record($, slot, () => recordRun($, slot, runRetryArgs(runDir, tile.retryOpId, tile.optionLabel)));
+}
+
+/** Whether an option is kept now: the person's unanswered click, else the view's heart. */
+function keptNow(candidateId) {
+  const mine = ui.keep[candidateId];
+  if (mine) return mine.kept;
+  const view = viewOf(current);
+  const candidate = view ? view.candidates.find((entry) => entry.candidateId === candidateId) : null;
+  return Boolean(candidate && candidate.kept === true);
+}
+
+/** Keep: the heart toggles at once and is sent; it waits for nobody, so the agent is not told. The last click settles it. */
+function toggleKeep($, tile) {
+  const runDir = current;
+  const id = tile.candidateId;
+  const kept = !keptNow(id);
+  const seq = (ui.keep[id] ? ui.keep[id].seq : 0) + 1;
+  ui.keep[id] = { kept, seq };
+  $.ui.invalidate('ui.render');
+  rpc($, TOOLS.run, runKeepArgs(runDir, uuidV4(), tile.optionLabel, kept)).then(async ({ structured }) => {
+    const now = ui.keep[id];
+    // A later click is still on its way: its own answer settles the heart.
+    if (runDir !== current || !now || now.seq !== seq || !structured || !isView(structured.view)) return;
+    delete ui.keep[id];
+    await applyView($, runDir, structured.view);
+  }, (error) => {
+    const now = ui.keep[id];
+    if (runDir === current && now && now.seq === seq) delete ui.keep[id];
+    actionError = errorLine(error);
+    $.ui.invalidate('ui.render');
+  });
+}
+
+/** Simplify the large view's design, `standard` or `high`; the request is the agent's to draw, as an edit is. */
+function simplifyDesign($, level) {
+  const tile = largeTile();
+  if (!tile || !tile.versionId) return Promise.resolve();
+  const runDir = current;
+  const slot = workspaceSlot(runDir, 'simplify', tile.versionId, level);
+  return record($, slot, async () => {
+    await recordRun($, slot, runSimplifyArgs(runDir, draftId(slot), tile.versionId, level));
+    ui.lv = null;
+  });
+}
+
+/** More on one group of a mixed round: a round of that technique only, at the person's 6 or 12. */
+function moreOfGroup($, group) {
+  const view = viewOf(current);
+  if (!view || !group || hasRunning(view)) return Promise.resolve();
+  const runDir = current;
+  const slot = workspaceSlot(runDir, 'more', group);
+  return record($, slot, () => recordRun($, slot, runNewArgs(runDir, draftId(slot), { count: perRoundOf(view, ui.perRound), group })));
+}
+
+/** Add the person's own sketch: the picture file at the typed path, read here and sent with the selection, which it joins. */
+function addSketch($, text) {
+  ui.sketchPath = String(text ?? ui.sketchPath);
+  const runDir = current;
+  const path = typedPath(ui.sketchPath);
+  return record($, workspaceSlot(runDir, 'sketch-add'), async () => {
+    if (!path) throw refusal('Type the path of a JPEG, PNG or WebP file first.');
+    let read;
+    try {
+      read = await $.fs.read(path, { as: 'bytes' });
+    } catch (error) {
+      throw refusal(`Could not read ${path}: ${error && error.message ? error.message : String(error)}`);
+    }
+    const sketch = sketchUpload(read.base64);
+    const sent = selectionNow();
+    const { structured } = await rpc($, TOOLS.inspiration, inspirationArgs(runDir, sent, { sketch }));
+    ui.sketchPath = '';
+    ui.tab = 'sketches';
+    // The added sketch is a pick too: of the round that waits on the person, else of the selection.
+    const added = structured && Array.isArray(structured.selected) ? structured.selected.filter((id) => isSketchId(id) && !sent.includes(id))[0] : null;
+    if (structured && isView(structured.view)) await applyView($, runDir, structured.view);
+    if (!added) return;
+    const pause = pauseNow();
+    if (pause) {
+      if (!pause.picks.includes(added)) togglePickOf($, added);
+    } else if (selection.ids !== null && !selection.ids.includes(added)) selection.ids = [...selection.ids, added];
+  });
+}
+
+/** Remove one of the person's own sketches: off the tab and out of the selection, or of the waiting round's picks. */
+function removeSketch($, id) {
+  const runDir = current;
+  return record($, workspaceSlot(runDir, 'sketch-remove', id), async () => {
+    const pause = pauseNow();
+    if (pause && pause.picks.includes(id)) togglePickOf($, id);
+    if (selection.ids !== null) selection.ids = selection.ids.filter((entry) => entry !== id);
+    const keep = selectionNow().filter((entry) => entry !== id);
+    const { structured } = await rpc($, TOOLS.inspiration, inspirationArgs(runDir, keep, { removeSketch: id }));
+    if (structured && isView(structured.view)) await applyView($, runDir, structured.view);
+  });
 }
 
 function continueRound($) {
@@ -477,7 +635,8 @@ function setPerRound($, n) {
 
 function largeTile() {
   const view = viewOf(current);
-  return view && ui.lv ? tilesOf(view).find((tile) => tile.candidateId === ui.lv.candidateId) ?? null : null;
+  const tile = view && ui.lv ? tilesOf(view).find((entry) => entry.candidateId === ui.lv.candidateId) ?? null : null;
+  return tile ? { ...tile, kept: keptNow(tile.candidateId) } : null;
 }
 
 /** Build this: record the pick, record the Convert-to-HTML hand-off (the request Claude builds from), then tell Claude. */
@@ -547,6 +706,11 @@ function pictureFor(surface, thumbSlot, size, useCells, tileColumns, maxRows) {
   if (!thumb) return null;
   if (thumb.state === 'loading') return { kind: 'loading' };
   if (thumb.state === 'failed') return { kind: 'failed', reason: thumb.reason };
+  // A model sketch is vector text: the desktop draws it as it is; the terminal has no Svg element.
+  if (thumb.svg !== undefined) {
+    if (surface === 'terminal' || thumb.svg.length > SVG_MAX_CHARS) return { kind: 'text', text: 'A layout sketch. Sketch pictures show in the Claude app.' };
+    return { kind: 'svg', source: thumb.svg, ...desktopPictureSize(tileBox(tileColumns, size.width, size.height, maxRows), size.width, size.height) };
+  }
   const kind = pictureKind(surface, { useCells });
   if (kind !== 'svg' && !thumb.decoded) {
     if (decodes.left <= 0) {
@@ -630,7 +794,9 @@ function paneModel(surface, props, pictureOf) {
     errorText: actionError || pollError,
     tileColumns,
     items: [],
-    tiles: [],
+    sections: [],
+    selectable: ui.tab !== 'designs',
+    sketches: ui.tab === 'sketches' ? { drawing: false, path: ui.sketchPath } : null,
     lv: null,
     tray: null,
     selectedCount: 0,
@@ -641,8 +807,9 @@ function paneModel(surface, props, pictureOf) {
   if (!view) return { model, probe };
   if (!ui.promptEdited) model.prompt = ui.prompt = briefLine(view);
   const pause = pauseNow();
-  const picks = pause ? pause.picks : [];
-  model.selectedCount = pause ? picks.length : (view.pick ? 1 : 0);
+  // What is picked: the waiting round's picks, else the selection the next round draws from.
+  const picks = pause ? pause.picks : selectionNow();
+  model.selectedCount = ui.tab !== 'designs' || pause ? picks.length : (view.pick ? 1 : 0);
   if (pause) {
     model.tray = { words: `${picks.length} picked · ${countdownLine(pause.countdown)}`, canContinue: picks.length > 0 };
   }
@@ -656,17 +823,28 @@ function paneModel(surface, props, pictureOf) {
         model.lv = { tile, picture: remember(`lv:${tile.candidateId}`, picture), mode: ui.lv.mode, scope: ui.lv.scope, pages: ui.lv.pages };
       } else ui.lv = null;
     }
-    model.tiles = tilesOf(view).map((tile) => ({
+    const tiles = tilesOf(view).map((tile) => ({
       ...tile,
+      kept: keptNow(tile.candidateId),
       picture: tile.versionId ? remember(tile.candidateId, pictureOf(workspaceSlot(current, tile.versionId), { width: tile.width, height: tile.height }, tileColumns, maxRows)) : null,
     }));
+    model.sections = designSections(view, tiles);
   } else {
-    const ids = ui.tab === 'references' ? siteItems(view) : inspirationIds(view).map((id) => ({ id, title: '' }));
-    model.emptyLine = ui.tab === 'references' ? (pause ? 'Finding live sites.' : 'No website references yet.') : 'No inspiration yet.';
+    let ids;
+    let sizeOf = (id) => refSize(view, id);
+    if (ui.tab === 'sketches') {
+      ids = sketchesOf(view).map((sketch) => ({ id: sketch.id, title: sketchName(view, sketch.id), own: sketch.own }));
+      sizeOf = () => sketchSize(view);
+      model.sketches = { drawing: sketchesDrawing(view), path: ui.sketchPath };
+      model.emptyLine = SKETCHES_NONE;
+    } else {
+      ids = ui.tab === 'references' ? siteItems(view) : inspirationIds(view).map((id) => ({ id, title: '' }));
+      model.emptyLine = ui.tab === 'references' ? (pause ? 'Finding live sites.' : 'No website references yet.') : 'No inspiration yet.';
+    }
     model.items = ids.map((item) => ({
       ...item,
       selected: picks.includes(item.id),
-      picture: remember(item.id, pictureOf(workspaceSlot(current, `ref:${item.id}`), refSize(view, item.id), tileColumns, maxRows)),
+      picture: remember(item.id, pictureOf(workspaceSlot(current, `ref:${item.id}`), sizeOf(item.id), tileColumns, maxRows)),
     }));
   }
   return { model, probe };
@@ -731,6 +909,13 @@ export function register(on) {
       branchPagesInput: (value) => { if (ui.lv) ui.lv.pages = String(value ?? ''); },
       branchSubmit: (value) => { void branchDesign($, 'site', value ?? (ui.lv ? ui.lv.pages : '')); },
       buildThis: () => { void buildThis($); },
+      retry: (tile) => { void retryOption($, tile); },
+      keep: (tile) => { toggleKeep($, tile); },
+      simplify: (level) => { void simplifyDesign($, level); },
+      groupMore: (group) => { void moreOfGroup($, group); },
+      sketchPathInput: (value) => { ui.sketchPath = String(value ?? ''); },
+      addSketch: (value) => { void addSketch($, value); },
+      removeSketch: (id) => { void removeSketch($, id); },
     });
     return paneTree(els, model);
   });

@@ -1,7 +1,9 @@
 /**
- * The arguments of the clicks the pane records: Build this (`design.slate.pick`, then `design.slate.handoff`), Edit, Branch, Generate more and
- * Continue (`design.slate.run`). Each request carries a UUID v4 minted
- * when its dialog opened, so a repeated call never repeats work (the schema's rule). Pure: no `$`.
+ * The arguments of the clicks the pane records: Build this (`design.slate.pick`, then `design.slate.handoff`), Edit,
+ * Simplify, Branch, Generate more (and a group's More), Keep, Retry and Continue (`design.slate.run`), and the
+ * inspiration selection with the person's own sketches (`design.slate.inspiration`). A new request carries a UUID v4
+ * minted when its dialog opened, so a repeated call never repeats work (the schema's rule); hold, continue and retry
+ * name the request that already exists (the waiting round's, the failed round's), whose own id they carry. Pure: no `$`.
  *
  * The limits are the server's schema (workers/api/src/slate/mcp/tools.json); a value over one is refused here with
  * words the pane shows, rather than sent to be refused.
@@ -57,15 +59,43 @@ export function convertHandoffArgs(runDir, handoffId, versionId) {
   return { runDir, handoffId: requireId(handoffId), kind: 'convert', versionId, options: { engine: 'local', output: 'html' } };
 }
 
-/** `design.slate.run`: new options, `count` of MORE_COUNTS, an optional steer note. */
-export function runNewArgs(runDir, opId, { count = MORE_COUNT_INITIAL, note = '' } = {}) {
+/** The techniques of a mixed round (the server's SlateGroup); a group's More draws more of one. */
+export const GROUPS = Object.freeze(['sketch', 'inspiration', 'site']);
+
+/**
+ * `design.slate.run`: new options, `count` of MORE_COUNTS, an optional steer note, an optional `group` (a mixed round's
+ * More on one technique: a round of that group only, `count` the person's 6 or 12 of which the server deals the group's).
+ */
+export function runNewArgs(runDir, opId, { count = MORE_COUNT_INITIAL, note = '', group = null } = {}) {
   const n = Number(count);
   if (!MORE_COUNTS.includes(n)) throw actionError(`Choose ${MORE_COUNTS.join(', ')} options.`);
   const words = cleanText(note);
   if (words.length > NOTE_MAX_CHARS) throw actionError(`The note is longer than ${NOTE_MAX_CHARS} characters.`);
+  if (group !== null && !GROUPS.includes(group)) throw actionError('Choose a group of the round.');
   const action = { kind: 'round', mode: 'new', count: n };
   if (words) action.note = words;
+  if (group) action.group = group;
   return { runDir, opId: requireId(opId), action };
+}
+
+/** `design.slate.run`: draw a failed option again, through the failed round's own request (`roundOpId`). */
+export function runRetryArgs(runDir, roundOpId, option) {
+  if (!option) throw actionError('Choose the option to draw again.');
+  return { runDir, opId: requireId(roundOpId), action: { kind: 'retry', option } };
+}
+
+/** `design.slate.run`: the person's Keep heart on an option; it waits for nobody, so it needs no agent. */
+export function runKeepArgs(runDir, opId, option, kept) {
+  return { runDir, opId: requireId(opId), action: { kind: 'keep', option, kept: Boolean(kept) } };
+}
+
+/** The levels of a Simplify (the hosted screen's two choices). */
+export const SIMPLIFY_LEVELS = Object.freeze(['standard', 'high']);
+
+/** `design.slate.run`: simplify one version, `standard` or `high` (which ranks every competing element before it picks). */
+export function runSimplifyArgs(runDir, opId, versionId, level = 'standard') {
+  if (!SIMPLIFY_LEVELS.includes(level)) throw actionError('Choose Standard or High.');
+  return { runDir, opId: requireId(opId), action: { kind: 'simplify', versionId, level } };
 }
 
 /** `design.slate.run`: more like one version (the server's default count). */
@@ -96,6 +126,17 @@ export function continueArgs(runDir, roundOpId, { referenceIds = null, brief = '
 /** `design.slate.run`: hold a waiting round's countdown while the person chooses (the screen holds on any touch). */
 export function holdArgs(runDir, roundOpId) {
   return { runDir, opId: requireId(roundOpId), action: { kind: 'hold' } };
+}
+
+/** The most inspiration ids one selection holds (the server's schema): references, websites and sketches together. */
+export const SELECTION_MAX = 8;
+
+/** `design.slate.inspiration`: replace the whole selection; with `sketch` also add the person's own sketch, with `removeSketch` remove one. */
+export function inspirationArgs(runDir, referenceIds, { sketch = null, removeSketch = null } = {}) {
+  const args = { runDir, referenceIds: [...referenceIds].slice(0, SELECTION_MAX) };
+  if (sketch) args.sketch = { mimeType: sketch.mimeType, data: sketch.data };
+  if (removeSketch) args.removeSketch = removeSketch;
+  return args;
 }
 
 /** `design.slate.inspire`: search the reference collection with the prompt's words. */

@@ -58,6 +58,8 @@ export function useCellsFor({ toggled = null, altDrawn = false } = {}) {
 
 /** The decoded thumbnail: `{ rgba, width, height }` from the JPEG's base64. Throws on bytes that are not a JPEG. */
 export function decodeThumb(jpegBase64, mimeType = 'image/jpeg') {
+  // The mod carries no PNG decoder: an own sketch uploaded as a PNG shows on the desktop (embedded as it is) when it fits.
+  if (mimeType === 'image/png') throw new Error('this PNG cannot be previewed here');
   if (mimeType === 'image/webp') {
     const webp = decodeWebp(base64Decode(jpegBase64));
     return { rgba: webp.data, width: webp.width, height: webp.height };

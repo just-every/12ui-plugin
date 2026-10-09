@@ -6,7 +6,7 @@ Your agent runs the 12ui command line once per request, which draws every option
 
 Works in Claude Code on a computer with Node.js; your agent installs the 12ui command line once. Drawing needs Codex signed in with ChatGPT on the same computer; without it nothing is drawn and each option shows the reason. The pane needs Claude Code 2.1.287 or later, in the terminal or the Desktop app's Code tab. The draw command reaches design.12ui.com, and Claude Code asks you to approve it.
 
-Version 0.2.120. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
+Version 0.2.121. Install with `claude plugin marketplace add just-every/12ui-plugin`, then `claude plugin install 12ui-design@12ui-plugin`.
 
 ## Requirements
 
@@ -27,11 +27,12 @@ Version 0.2.120. Install with `claude plugin marketplace add just-every/12ui-plu
 The mod is the Design workspace pane. It runs inside Claude Code as plain readable source in `hooks/`.
 
 - **The one host it contacts:** `https://design.12ui.com/mcp`, this plugin's own MCP server. The address is written as fixed text at the mod's one network call, and the request cannot be sent anywhere else.
-- **What it reads:** the results of this plugin's own two tools, `design_slate_create` and `design_slate_show`, for the workspace handle, and what you click and type in the pane. It reads nothing else from the conversation.
+- **What it reads:** the results of this plugin's own two tools, `design_slate_create` and `design_slate_show`, for the workspace handle, and what you click and type in the pane. It reads nothing else from the conversation. The one file it reads is the picture whose path you type in the Sketches tab, when you press Add.
 - **What it sends,** to that host only, and never any conversation text:
 
   - the workspace handle, and the option, version, reference and request ids the pane shows
-  - your picks and which button you pressed (new options, more like an option, an edit, a branch, Build this, Continue)
+  - your picks and which button you pressed (new options, more like an option, an edit, a simplify, a retry, a branch, Build this, Continue, Keep)
+  - the picture file you add as your own sketch in the Sketches tab (a JPEG, PNG or WebP of at most 300 KiB, read from the path you type), and which of your sketches you remove
   - the words you type in the pane (the design prompt, an edit note, branch page names)
 
 - **The prompts it submits:** after you click in the pane, one line telling Claude what you did, exactly one of these (`{label}` is an option's letter, `{request}` and `{handle}` are ids). Your own words are never put in a prompt; Claude reads them from the workspace.
@@ -39,11 +40,14 @@ The mod is the Design workspace pane. It runs inside Claude Code as plain readab
   - `The user asked for new options in the Design workspace (request {request}, runDir {handle}). Please confirm it with design.slate.data, then carry it out.`
   - `The user asked for more like {label} in the Design workspace (request {request}, runDir {handle}). Please confirm it with design.slate.data, then carry it out.`
   - `The user asked to edit {label} in the Design workspace (request {request}, runDir {handle}). Please confirm it with design.slate.data, then carry it out.`
+  - `The user asked to simplify {label} in the Design workspace (request {request}, runDir {handle}). Please confirm it with design.slate.data, then carry it out.`
+  - `The user asked to draw option {label} again in the Design workspace (request {request}, runDir {handle}). Please confirm it with design.slate.data, then carry it out.`
+  - `The user asked for more options of one group in the Design workspace (request {request}, runDir {handle}). Please confirm it with design.slate.data, then carry it out.`
   - `The user asked for the full page of {label} in the Design workspace (request {request}, runDir {handle}). Please confirm it with design.slate.data, then carry it out.`
   - `The user asked for more pages of {label} in the Design workspace (request {request}, runDir {handle}). Please confirm it with design.slate.data, then carry it out.`
   - `The user chose design {label} to build in the Design workspace (runDir {handle}). Please read its selection with design.slate.data, then build that design as the user's request asks.`
 
-- **What it never does:** it reads no credentials, keys, environment, settings or files, runs no commands or processes, calls no model and touches no other tool's calls.
+- **What it never does:** it reads no credentials, keys, environment or settings, no file but the one picture you name in the Sketches tab, runs no commands or processes, calls no model and touches no other tool's calls.
 
 Hooks it registers, each with what it is for:
 
@@ -55,8 +59,9 @@ Calls it makes, each with its purpose:
 
 - `$.clock.after`: schedules the next workspace refresh, the follow-up check after a click, and one redraw for pictures that land together or for what changed during your presses
 - `$.clock.now`: reads the time to pace the workspace refreshes and redraws, and to refresh when the start countdown ends
+- `$.fs.read`: reads the one picture file whose path you type in the Sketches tab when you press Add, to send it as your own sketch; it reads no other file
 - `$.http.fetch`: reads the workspace and records your clicks at https://design.12ui.com/mcp
-- `$.prompt.submit`: tells Claude, in one fixed line, what you clicked in the pane (new options, more like an option, an edit, a branch, Build this); never your own words
+- `$.prompt.submit`: tells Claude, in one fixed line, what you clicked in the pane (new options, more like an option, an edit, a simplify, a retry, a branch, Build this); never your own words
 - `$.ui.blit`: asks whether the terminal shows pictures, to switch to colour cells where it cannot
 - `$.ui.invalidate`: redraws the pane when the workspace changes
 - `$.ui.log`: writes diagnostic lines to Claude Code's debug log
@@ -99,7 +104,7 @@ line for local work. The hosted service and its documentation live at
 [12ui.com](https://12ui.com/).
 
 This repository is generated from the private 12ui implementation at the exact
-`@12ui/design` release revision. Version **0.2.120** matches the npm package.
+`@12ui/design` release revision. Version **0.2.121** matches the npm package.
 
 ### Install as a Codex plugin
 
@@ -142,16 +147,16 @@ command line supports before a run.
 
 ### Manual directory upload
 
-Each GitHub release attaches `12ui-design-0.2.120.zip`, the validated
+Each GitHub release attaches `12ui-design-0.2.121.zip`, the validated
 plugin with the manifest and skill at the archive root, and
-`12ui-design-0.2.120-openai.zip`, its skills-only form for the OpenAI
+`12ui-design-0.2.121-openai.zip`, its skills-only form for the OpenAI
 Plugins Directory manual upload flow.
 
 ### Provenance
 
 Every release is generated from a fixed allowlist, validated for exact skill,
 icon, manifest, and marketplace parity, packaged as a zip, tagged
-`design-v0.2.120`, and published only after the matching npm release
+`design-v0.2.121`, and published only after the matching npm release
 completes. Do not edit generated files directly; changes must originate in the
 12ui release source.
 

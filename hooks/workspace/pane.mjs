@@ -4,13 +4,15 @@
  * passes in.
  *
  * Top to bottom, as the hosted screen lays it out: one prompt line (its Design button inside the same row), the tabs
- * Inspiration · References · Designs with a quiet "N selected" at the right, the notice and error lines, then the
- * active tab. Inspiration and References are a wrapped gallery of picture tiles; a selected tile carries a ring and a
- * check. The tray under the gallery holds the round's words and Continue. Designs holds the 6 · 12 switch and the
- * design tiles; pressing one opens the large view with Edit · Branch · Build this.
+ * Sketches · Inspiration · References · Designs with a quiet "N selected" at the right, the notice and error lines,
+ * then the active tab. Sketches, Inspiration and References are a wrapped gallery of picture tiles; a selected tile
+ * carries a ring and a check, and Sketches adds the person's own sketch from a typed path and removes it. The tray
+ * under the gallery holds the round's words and Continue. Designs holds the 6 · 12 switch and a section for each
+ * round (a mixed round's groups each with its More) of design tiles (Keep, and Retry on a failed one); pressing a
+ * tile opens the large view with Edit (and Simplify) · Branch · Build this, and Keep.
  */
 
-import { BAND_TEXT, BRANCH_PAGES_HINT, LABELS, LOADING, pictureAlt } from './copy.mjs';
+import { BAND_TEXT, BRANCH_PAGES_HINT, LABELS, LOADING, SKETCHES_CAPTION, SKETCHES_DRAWING, SKETCH_PATH_HINT, pictureAlt } from './copy.mjs';
 import { TABS, TAB_LABELS } from './gallery.mjs';
 import { BUTTON_GAP, TILE_GAP, briefReserve } from './layout.mjs';
 import { stateLine } from './view.mjs';
@@ -33,6 +35,7 @@ function pictureNode(els, name, picture, alt) {
   if (picture.kind === 'image') return els.Image({ key: `picture:${name}`, source: picture.source, columns: picture.columns, rows: picture.rows, alt });
   if (picture.kind === 'raster') return els.Raster({ key: `cells:${name}`, cells: picture.cells, columns: picture.columns, rows: picture.rows });
   if (picture.kind === 'svg') return els.Svg({ source: picture.source, alt, width: picture.width, height: picture.height });
+  if (picture.kind === 'text') return text(els, picture.text, { dimColor: true, wrap: 'wrap' });
   if (picture.kind === 'loading') return text(els, 'Loading picture', { dimColor: true });
   if (picture.kind === 'failed') return text(els, `No picture: ${picture.reason}`, { dimColor: true, wrap: 'wrap' });
   return null;
@@ -88,17 +91,16 @@ function tabsNode(els, model) {
 }
 
 /**
- * One gallery tile: its picture inside a ring when selected, then, only while a round waits for picks (the tray with
- * its Continue is there exactly then), the one-tap toggle. With no round waiting a pick would feed nothing, so no
- * button is offered.
+ * One gallery tile: its picture inside a ring when selected, then the one-tap toggle (a pick of the waiting round, or,
+ * with none waiting, of the selection the next round draws from) and, on an own sketch, its Remove.
  */
 function galleryTile(els, item, model) {
   const children = [pictureNode(els, item.id, item.picture, item.title || 'Reference')];
   if (item.title) children.push(text(els, item.title, { dimColor: true, wrap: 'truncate-end' }));
-  if (model.tray) {
-    const mark = item.selected ? `✓ ${LABELS.selected}` : LABELS.select;
-    children.push(els.Button({ key: `pick:${item.id}`, label: mark, ...quiet(!item.selected), dimColor: !item.selected, onPress: () => model.handlers.toggle(item.id) }));
-  }
+  const mark = item.selected ? `✓ ${LABELS.selected}` : LABELS.select;
+  const buttons = [els.Button({ key: `pick:${item.id}`, label: mark, ...quiet(!item.selected), dimColor: !item.selected, onPress: () => model.handlers.toggle(item.id) })];
+  if (item.own) buttons.push(els.Button({ key: `remove:${item.id}`, label: LABELS.remove, plain: true, dimColor: true, onPress: () => model.handlers.removeSketch(item.id) }));
+  children.push(row(els, `under:${item.id}`, buttons));
   return els.Box({
     key: `item:${item.id}`,
     flexDirection: 'column',
@@ -120,11 +122,38 @@ function trayNode(els, model) {
   ], 2);
 }
 
+/** The Sketches tab's head: its caption, the line for a running sketch call, and the typed path of an own sketch. */
+function sketchesHead(els, model) {
+  const { sketches, handlers } = model;
+  const parts = [text(els, SKETCHES_CAPTION, { dimColor: true, wrap: 'wrap' })];
+  if (sketches.drawing) parts.push(text(els, SKETCHES_DRAWING, { dimColor: true }));
+  if (els.Input) {
+    parts.push(row(els, 'sketch-add', [
+      els.Input({
+        key: 'sketch-path',
+        placeholder: SKETCH_PATH_HINT,
+        value: sketches.path,
+        submitLabel: LABELS.add.toLowerCase(),
+        onInput: (value) => handlers.sketchPathInput(value),
+        onSubmit: (value) => handlers.addSketch(value),
+      }),
+      els.Button({ key: 'sketch-add-button', label: LABELS.add, variant: 'primary', onPress: () => handlers.addSketch() }),
+    ], 2));
+  }
+  return parts;
+}
+
 function galleryNode(els, model) {
-  const parts = [trayNode(els, model)];
+  const parts = [model.sketches ? els.Box({ key: 'sketches-head', flexDirection: 'column', children: sketchesHead(els, model) }) : null, trayNode(els, model)];
   if (model.items.length === 0) parts.push(text(els, model.emptyLine, { dimColor: true, wrap: 'wrap' }));
   else parts.push(els.Box({ key: 'gallery', flexDirection: 'row', flexWrap: 'wrap', columnGap: TILE_GAP, children: model.items.map((item) => galleryTile(els, item, model)) }));
   return parts.filter(Boolean);
+}
+
+/** The Keep heart of a mixed round's design with a picture (the hosted screen offers it nowhere else). */
+function keepButton(els, tile, handlers, key) {
+  if (!tile.group || !tile.versionId) return null;
+  return els.Button({ key, label: tile.kept ? LABELS.kept : LABELS.keep, ...quiet(!tile.kept), dimColor: !tile.kept, onPress: () => handlers.keep(tile) });
 }
 
 function designTile(els, tile, model) {
@@ -133,6 +162,8 @@ function designTile(els, tile, model) {
     row(els, `under:${tile.candidateId}`, [
       els.Button({ key: `open:${tile.candidateId}`, label: tile.label, plain: true, onPress: () => model.handlers.open(tile) }),
       tile.isReady && !tile.isSelected ? null : text(els, tile.isSelected ? LABELS.chosen : stateLine(tile), tile.state === 'failed' ? { color: 'red', wrap: 'wrap' } : { dimColor: true, wrap: 'wrap' }),
+      keepButton(els, tile, model.handlers, `keep:${tile.candidateId}`),
+      tile.retryOpId ? els.Button({ key: `retry:${tile.candidateId}`, label: LABELS.retry, variant: 'primary', onPress: () => model.handlers.retry(tile) }) : null,
     ]),
   ];
   return els.Box({
@@ -153,9 +184,25 @@ function designsNode(els, model) {
     ...model.perRoundOptions.map((n) => els.Button({ key: `per:${n}`, label: String(n), ...quiet(model.perRound !== n), dimColor: model.perRound !== n, variant: model.perRound === n ? 'primary' : undefined, onPress: () => model.handlers.perRound(n) })),
   ]);
   const parts = [trayNode(els, model), switchRow];
-  if (model.tiles.length === 0) parts.push(text(els, 'No designs yet.', { dimColor: true }));
-  else parts.push(els.Box({ key: 'designs', flexDirection: 'row', flexWrap: 'wrap', columnGap: TILE_GAP, marginTop: 1, children: model.tiles.map((tile) => designTile(els, tile, model)) }));
+  if (model.sections.length === 0) parts.push(text(els, 'No designs yet.', { dimColor: true }));
+  else for (const section of model.sections) parts.push(sectionNode(els, section, model));
   return parts.filter(Boolean);
+}
+
+/** One round: its heading, then each group (a mixed round's technique with its More) over its design tiles. */
+function sectionNode(els, section, model) {
+  const children = [text(els, section.title, { bold: true })];
+  for (const group of section.groups) {
+    if (group.name) {
+      children.push(row(els, `group-head:${group.key}`, [
+        text(els, group.name, { dimColor: true }),
+        group.gap ? text(els, group.gap, { dimColor: true, wrap: 'wrap' }) : null,
+        group.more ? els.Button({ key: `more:${group.key}`, label: LABELS.groupMore, plain: true, onPress: () => model.handlers.groupMore(group.group) }) : null,
+      ], 2));
+    }
+    children.push(els.Box({ key: `designs:${group.key}`, flexDirection: 'row', flexWrap: 'wrap', columnGap: TILE_GAP, children: group.tiles.map((tile) => designTile(els, tile, model)) }));
+  }
+  return els.Box({ key: `section:${section.key}`, flexDirection: 'column', marginTop: 1, children });
 }
 
 /** The large view of one design: the picture at the pane's width, then Edit · Branch · Build this. */
@@ -167,6 +214,7 @@ function largeViewNode(els, model) {
     if (els.Input) actions.push(els.Button({ key: 'lv-edit', label: LABELS.edit, ...quiet(lv.mode !== 'edit'), onPress: () => handlers.edit() }));
     // Once the design is building, Branch is no longer offered next to "Building".
     if (!tile.isSelected) actions.push(els.Button({ key: 'lv-branch', label: LABELS.branch, ...quiet(lv.mode !== 'branch'), onPress: () => handlers.branch() }));
+    actions.push(keepButton(els, tile, handlers, 'lv-keep'));
     actions.push(tile.isSelected ? text(els, LABELS.chosen, { color: RING }) : els.Button({ key: 'lv-build-this', label: LABELS.buildThis, variant: 'primary', onPress: () => handlers.buildThis() }));
   }
   const children = [
@@ -183,6 +231,14 @@ function largeViewNode(els, model) {
       autoFocus: true,
       onSubmit: (value) => handlers.editSubmit(value),
     }));
+    // Simplify, the edit bar's quick tool: removes up to two elements of the design that add nothing, as one new version.
+    if (tile.editable) {
+      children.push(row(els, 'lv-simplify', [
+        text(els, LABELS.simplify, { dimColor: true }),
+        els.Button({ key: 'lv-simplify-standard', label: LABELS.standard, onPress: () => handlers.simplify('standard') }),
+        els.Button({ key: 'lv-simplify-high', label: LABELS.high, onPress: () => handlers.simplify('high') }),
+      ], 2));
+    }
   }
   if (lv.mode === 'branch') children.push(...branchNodes(els, model));
   return children;

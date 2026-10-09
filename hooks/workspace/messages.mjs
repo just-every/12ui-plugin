@@ -2,7 +2,8 @@
  * What the pane tells Claude after a click is recorded, and when it says nothing: the port of the hosted screen's
  * messages (packages/12ui/src/mcp-slate-ui-script-remote.ts). Pure: no `$`, no clock.
  *
- * Five messages, one per click: new options, more like an option, an edit, a branch, and Build this (the selection). `$.prompt.submit`
+ * Eight messages, one per click that waits for the agent: new options (or more of one group), more like an option, an edit,
+ * a simplify, a retry, a branch, and Build this (the selection). Keep and the sketch and selection writes wait for nobody. `$.prompt.submit`
  * sends them framed as from this mod, so "I" of the screen becomes "The user". Each names what happened and how to
  * confirm it (`design.slate.data`, whose answer is the server's own trusted text) and carries no command, flag, path,
  * price or credit word; the user's own words (a note, an edit instruction, branch page names) are never put in a
@@ -18,12 +19,15 @@ export const DATA_TOOL = 'design.slate.data';
 export const RUNNER_GRACE_MS = 20000;
 export const RUNNER_RECHECK_MS = 10000;
 
-/** The message for a recorded Generate more, More like this, Edit or Branch request. */
+/** The message for a recorded Generate more, More like this, Edit, Simplify, Retry or Branch request. */
 export function runMessage(runDir, opId, action, labelOf) {
   let head;
-  if (action.kind === 'edit') head = `The user asked to edit ${labelOf(action.versionId) ?? 'an option'}`;
+  if (action.kind === 'retry') head = `The user asked to draw ${action.option ? `option ${action.option}` : 'a failed option'} again`;
+  else if (action.kind === 'simplify') head = `The user asked to simplify ${labelOf(action.versionId) ?? 'an option'}`;
+  else if (action.kind === 'edit') head = `The user asked to edit ${labelOf(action.versionId) ?? 'an option'}`;
   else if (action.mode === 'branch') head = `The user asked for ${action.scope === 'page' ? 'the full page' : 'more pages'} of ${labelOf(action.fromVersionId) ?? 'a design'}`;
   else if (action.mode === 'like') head = `The user asked for more like ${labelOf(action.fromVersionId) ?? 'an option'}`;
+  else if (action.group) head = 'The user asked for more options of one group';
   else head = 'The user asked for new options';
   return `${head} in the Design workspace (request ${opId}, runDir ${runDir}). Please confirm it with ${DATA_TOOL}, then carry it out.`;
 }

@@ -35,13 +35,26 @@ function roundById(view, roundId) {
   return view.rounds.find((round) => round.roundId === roundId) ?? null;
 }
 
-function byLabel(a, b) {
+/**
+ * The request a failed option's Retry names: the latest op of the option's own round (a branch round has no Retry
+ * here), once it has stopped. Retry draws the option again through that same request, so it carries the op's own id.
+ */
+function failedRoundOpId(view, candidate) {
+  const round = roundById(view, candidate.roundId);
+  if (!round || round.kind === 'branch') return null;
+  const ops = view.ops.filter((op) => op.kind === 'round' && op.roundId === candidate.roundId);
+  const op = ops.length ? ops[ops.length - 1] : null;
+  return op && !isRunningOp(op) ? op.opId : null;
+}
+
+export function byLabel(a, b) {
   return a.label.length - b.label.length || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0);
 }
 
 /**
  * The state words of one option: `selected`, `ready`, `waiting to start` (its round waits on the person),
  * `being drawn` (the runner holds it), `waiting for your agent`, or `failed` with the server's reason verbatim.
+ * A failed option with no picture carries `retryOpId`, the request its Retry names.
  */
 export function tileOf(view, candidate) {
   const versionId = candidate.latestVersionId ?? null;
@@ -72,6 +85,11 @@ export function tileOf(view, candidate) {
     editable: Boolean(version && version.editable),
     state,
     reason,
+    roundId: candidate.roundId,
+    // A mixed round's technique (`sketch`, `inspiration`, `site`), the Keep heart, and the request that draws the option again.
+    group: candidate.group ?? null,
+    kept: candidate.kept === true,
+    retryOpId: state === 'failed' && !version ? failedRoundOpId(view, candidate) : null,
   };
 }
 
