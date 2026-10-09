@@ -4,6 +4,8 @@
  * (workers/api/src/slate/view.ts): `inspiration.searches`, `references`, `sites`, `rounds[].referenceIds` and `pause`.
  */
 
+import { shownVersionIds } from './view.mjs';
+
 export const TABS = Object.freeze(['inspiration', 'references', 'designs']);
 export const TAB_LABELS = Object.freeze({ inspiration: 'Inspiration', references: 'References', designs: 'Designs' });
 /** Designs per round: 6 by default, 12 one tap away (the screen's switch). */
@@ -80,6 +82,47 @@ export function perRoundOf(view, tapped) {
   const rounds = view.rounds || [];
   const newest = rounds.length ? rounds[rounds.length - 1] : null;
   return newest && typeof newest.count === 'number' && newest.count >= 12 ? 12 : 6;
+}
+
+/**
+ * The tab the pane opens a workspace on: Inspiration while a round waits for the person's picks (its Select buttons
+ * work only then); otherwise Designs once the workspace has options to show; Inspiration when it has none yet.
+ */
+export function openingTab(view, roundWaits) {
+  if (roundWaits) return 'inspiration';
+  return view.candidates.length > 0 ? 'designs' : 'inspiration';
+}
+
+/**
+ * The thumbnails a tab shows, each with the slot it is kept under (the version id, or `ref:` and the reference id) and
+ * which picture tool reads it. Only the shown tab's decide a drawing (redraw.mjs `drawnSignature`).
+ */
+export function tabThumbs(view, tab) {
+  if (tab === 'designs') {
+    return shownVersionIds(view).map((versionId) => ({ slot: versionId, kind: 'version', args: { versionId } }));
+  }
+  const ids = tab === 'references' ? siteItems(view).map((site) => site.id) : inspirationIds(view);
+  return ids.map((id) => ({ slot: `ref:${id}`, kind: 'reference', args: { referenceId: id } }));
+}
+
+/**
+ * Every thumbnail the pane reads for a view: the shown tab's first, then the other tabs', each slot once (a pick that is
+ * also a website is one picture). The other tabs' pictures land without a redraw, since only the shown tab is drawn, so
+ * a tab's first visit draws them in the press's own drawing. Read for the shown tab only, each first visit drew its
+ * tab once or twice more 1 to 2 s after the press, where the next press landed (gate press rig, a press every 2 s: 1 of
+ * 14 presses refused that way in out-drawn400p2000 and in out-drawn400p2000c; every 3 s, 1 of 9 in out-drawn400p3000a).
+ */
+export function viewThumbs(view, shownTab) {
+  const seen = new Set();
+  const wants = [];
+  for (const tab of [shownTab, ...TABS.filter((name) => name !== shownTab)]) {
+    for (const want of tabThumbs(view, tab)) {
+      if (seen.has(want.slot)) continue;
+      seen.add(want.slot);
+      wants.push(want);
+    }
+  }
+  return wants;
 }
 
 /** Whether tapping 12 draws a round of twelve now: the newest round drew fewer and no round runs. */

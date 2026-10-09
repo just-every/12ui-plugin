@@ -52,6 +52,3 @@ export const TERMINAL_PICTURE_ALT = 'Press v for colour cells';
 export function pictureAlt(label, surface) {
   return surface === 'terminal' ? TERMINAL_PICTURE_ALT : `Option ${label}`;
 }
-
-/** A pick with no round waiting on the person. */
-export const NO_ROUND_WAITING = 'Picks feed a round while it waits for you. Ask Claude for new designs to choose again.';

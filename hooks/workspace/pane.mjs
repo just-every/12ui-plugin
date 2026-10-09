@@ -87,12 +87,18 @@ function tabsNode(els, model) {
   });
 }
 
-/** One gallery tile: its picture inside a ring when selected, then the one-tap toggle. */
+/**
+ * One gallery tile: its picture inside a ring when selected, then, only while a round waits for picks (the tray with
+ * its Continue is there exactly then), the one-tap toggle. With no round waiting a pick would feed nothing, so no
+ * button is offered.
+ */
 function galleryTile(els, item, model) {
-  const mark = item.selected ? `✓ ${LABELS.selected}` : LABELS.select;
   const children = [pictureNode(els, item.id, item.picture, item.title || 'Reference')];
   if (item.title) children.push(text(els, item.title, { dimColor: true, wrap: 'truncate-end' }));
-  children.push(els.Button({ key: `pick:${item.id}`, label: mark, ...quiet(!item.selected), dimColor: !item.selected, onPress: () => model.handlers.toggle(item.id) }));
+  if (model.tray) {
+    const mark = item.selected ? `✓ ${LABELS.selected}` : LABELS.select;
+    children.push(els.Button({ key: `pick:${item.id}`, label: mark, ...quiet(!item.selected), dimColor: !item.selected, onPress: () => model.handlers.toggle(item.id) }));
+  }
   return els.Box({
     key: `item:${item.id}`,
     flexDirection: 'column',

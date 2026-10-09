@@ -188,19 +188,19 @@ describe('actions.test.ts', () => {
     await ui.unmount();
   });
 
-  test('a waiting round opens on Inspiration with its picks selected, and the tray counts them down', async ($, on) => {
+  test('a waiting round opens on Inspiration with its picks selected, and the tray says it starts soon', async ($, on) => {
     const deadline = 43000;
     let now = () => 1000;
     const { clock, server, ui } = await session($, on, workspaceAnswers(() => viewWith({ refs: REFS, pause: { state: 'countdown', remainingMs: deadline - now() } })));
     now = () => clock.now();
-    expect(await ui.find({ type: 'Text', text: '2 picked · Starting in 42 s. Press Continue to start now.' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: '2 picked · Starts soon. Press Continue to start now.' })).toBeDefined();
     expect((await ui.find({ key: 'pick:gen-a' }))?.props.label).toBe('✓ Selected');
     expect((await ui.find({ key: 'pick:gen-b' }))?.props.label).toBe('✓ Selected');
     expect((await ui.find({ key: 'pick:gen-c' }))?.props.label).toBe('Select');
     expect(await ui.find({ type: 'Text', text: '2 selected' })).toBeDefined();
     expect(server.calls.filter((call) => call.name === 'design.slate.reference').map((call) => call.args.referenceId).sort()).toEqual(REFS);
     await clock.advance(2000);
-    expect(await ui.find({ type: 'Text', text: '2 picked · Starting in 40 s. Press Continue to start now.' })).toBeDefined();
+    expect(await ui.find({ type: 'Text', text: '2 picked · Starts soon. Press Continue to start now.' })).toBeDefined();
     await ui.unmount();
   });
 

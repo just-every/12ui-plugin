@@ -66,6 +66,29 @@ export function decodeThumb(jpegBase64, mimeType = 'image/jpeg') {
   return { rgba: image.data, width: image.width, height: image.height };
 }
 
+/** Image source one pane tree may carry: under the engine's 2 MiB cap on a tree's Image sources. */
+export const IMAGE_TREE_BYTES = 1_800_000;
+
+/**
+ * One tree's Image budget. `admit(picture)` passes every picture through except an Image whose source would take the
+ * tree past `limit`, which waits as loading for a later drawing: the engine refuses a whole tree past its cap and draws
+ * an empty pane (seen live 2026-10-02 on a page of tall references before the blit probe answered). An Image's source
+ * is `{ rgba, width, height }` (`imageSource`), so the bytes that count are its base64 RGBA. Every other picture
+ * (Raster cells, an Svg, loading, failed) passes untouched.
+ */
+export function imageTreeBudget(limit = IMAGE_TREE_BYTES) {
+  let used = 0;
+  return {
+    admit(picture) {
+      if (!picture || picture.kind !== 'image') return picture;
+      const bytes = picture.source.rgba.length;
+      if (used + bytes > limit) return { kind: 'loading' };
+      used += bytes;
+      return picture;
+    },
+  };
+}
+
 /** The picture scaled to `width` x `height` by averaging the source area under each target pixel. */
 export function resizeRgba({ rgba, width, height }, toWidth, toHeight) {
   const w = Math.max(1, Math.round(toWidth));

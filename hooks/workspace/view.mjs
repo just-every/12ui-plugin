@@ -124,13 +124,19 @@ export function countdownOf(view, receivedAtMs) {
   return null;
 }
 
-/** "Starting in 42 s" while it counts down, "Paused" when held, "Starting" at zero or while awaiting the screen. */
-export function countdownLine(countdown, nowMs) {
+/**
+ * The tray's words for the start countdown: "Starts soon" while it counts down, "Paused" when held, "Starting" while
+ * awaiting the screen. They never change with the clock: every change is a fresh drawing, and a fresh drawing retires
+ * the buttons the person may be pressing (redraw.mjs); the 10 s steps that replaced the 1 s ticker still refused 6 of
+ * the 7 refused presses of a waiting round pressed every 2 s (gate out-wait400p2000a). The pane polls just after the
+ * countdown ends (poll.mjs `pollDelay`), and the round starting is the change that redraws it. Continue starts the
+ * round at any time.
+ */
+export function countdownLine(countdown) {
   if (!countdown) return '';
   if (countdown.state === 'held') return 'Paused. Press Continue when ready.';
-  if (countdown.state !== 'countdown' || countdown.endsAtMs === null) return 'Starting.';
-  const left = Math.ceil((countdown.endsAtMs - nowMs) / 1000);
-  return left > 0 ? `Starting in ${left} s. Press Continue to start now.` : 'Starting.';
+  if (countdown.state === 'countdown') return 'Starts soon. Press Continue to start now.';
+  return 'Starting.';
 }
 
 /** Whether anything in the workspace still runs (so the pane keeps polling). */

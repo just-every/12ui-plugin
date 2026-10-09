@@ -72,18 +72,18 @@ describe('pane.test.ts', () => {
   });
 
   for (const [surface, element, absent] of [['terminal', 'Image', 'Svg'], ['desktop', 'Svg', 'Image']] as const) {
-    test(`a ${surface} mount opens on Inspiration, and Designs draws the options with ${element}`, async ($, on) => {
+    test(`a ${surface} mount of a workspace with options and no round waiting opens on Designs and draws them with ${element}`, async ($, on) => {
       const clock = mock.clock(on, { now: 1000 });
       on('ui.blit', () => ({ value: {} }));
       await openWorkspace($, on, surface);
       const ui = await mountPane($, surface);
       await clock.advance(0);
       await clock.advance(0);
+      await clock.advance(1000);
       expect(await promptValue(ui)).toBe('A meditation app landing page');
       expect(await ui.find({ key: 'design' })).toBeDefined();
-      expect(await ui.find({ type: 'Text', text: 'No inspiration yet.' })).toBeDefined();
-      expect(await ui.find({ type: element })).toBeUndefined();
-      await showDesigns(ui);
+      expect(await ui.find({ type: 'Text', text: 'No inspiration yet.' })).toBeUndefined();
+      expect(await ui.find({ key: 'per:12' })).toBeDefined();
       expect(await ui.findAll({ type: element })).toHaveLength(1);
       expect(await ui.find({ type: absent })).toBeUndefined();
       expect(await ui.find({ type: 'Text', text: 'waiting for your agent' })).toBeDefined();
@@ -616,6 +616,355 @@ describe('pane.test.ts', () => {
     expect(passedOn).toEqual(['notes']);
     expect(await promptValue(ui)).toBe(FIRST_BRIEF);
     expect(await ui.find({ type: 'Text', text: 'Another plugin\'s pane' })).toBeUndefined();
+    await ui.unmount();
+  });
+
+  // ---- the hosted server's compact create result (workers/api/src/slate/summary.ts) ----
+  const SUMMARY_TEXT = JSON.stringify({
+    schema: '12ui.slate.summary/1', runDir: RUN_DIR, rev: 1, stamp: '1', options: 6, ready: 0,
+    requestId: '0d6c8a52-1f3e-4b7a-9c2d-3e4f5a6b7c8d', pushToken: `wp_${'a'.repeat(22)}`,
+  });
+
+  test('a create result in the compact summary shape opens the pane and reads the workspace it names (fires)', async ($, on) => {
+    const clock = mock.clock(on, { now: 1000 });
+    const server = fakeServer(workspaceAnswers(() => viewWith()));
+    const opened: unknown[] = [];
+    on('http.fetch', ($$: unknown, e: any) => server.answer(e.init));
+    on('ui.open', ($$: unknown, e: unknown) => { opened.push(e); return { value: { isPlaced: true } }; });
+    on('ui.panes', PANE_UP);
+    on('ui.log', () => ({ value: undefined }));
+    on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: SUMMARY_TEXT }));
+    await $.tool.call({ tool: CREATE, concept: 'A meditation app landing page' });
+    expect(opened).toEqual([{ id: PANE_ID, title: 'Design workspace' }]);
+    const ui = await mountPane($, 'desktop');
+    await clock.advance(0);
+    await clock.advance(0);
+    expect(server.calls.filter((call) => call.name === 'design.slate.status')[0]).toEqual({ name: 'design.slate.status', args: { runDir: RUN_DIR } });
+    expect(await promptValue(ui)).toBe('A meditation app landing page');
+    await ui.unmount();
+  });
+
+  test('a create result that failed opens nothing (silent)', async ($, on) => {
+    mock.clock(on, { now: 1000 });
+    const opened: unknown[] = [];
+    on('ui.open', ($$: unknown, e: unknown) => { opened.push(e); return { value: { isPlaced: true } }; });
+    on('tool.call', { tool: CREATE }, () => ({ result: { content: [], isError: true }, isError: true, text: 'rate_limited: Too many workspaces.' }));
+    await $.tool.call({ tool: CREATE, concept: 'x' } as never);
+    expect(opened).toEqual([]);
+  });
+
+  // ---- redraws the pane asks for on its own (redraw.mjs) ----
+  // Every fresh drawing retires the buttons the person may be pressing; these count the pane's own `$.ui.invalidate`.
+
+  /** A drawn workspace of `n` ready options (A, B, ...) with no round running, and a page of inspiration. */
+  function drawnView(n: number) {
+    const base: any = viewWith({ running: false, refs: Array.from({ length: 12 }, (_unused, index) => `gen-${index}`) });
+    const labels = Array.from({ length: n }, (_unused, index) => String.fromCharCode(65 + index));
+    base.candidates = labels.map((label) => ({ ...base.candidates[0], candidateId: `c_${label.toLowerCase()}`, label, versionIds: [`v_${label.toLowerCase()}`], latestVersionId: `v_${label.toLowerCase()}` }));
+    base.versions = labels.map((label) => ({ ...base.versions[0], versionId: `v_${label.toLowerCase()}`, candidateId: `c_${label.toLowerCase()}`, label }));
+    base.rounds[0].count = n;
+    base.rounds[0].readyCount = n;
+    return base;
+  }
+
+  /**
+   * A session on `surface` whose server answers every picture `pictureMs` after it was asked (on the session clock; 0
+   * answers at once), with the pane mounted and its first read answered. Counts the pane's `$.ui.invalidate` calls.
+   */
+  async function countedSession($: any, on: any, view: () => unknown, { surface = 'desktop', pictureMs = 0 }: { surface?: 'desktop' | 'terminal'; pictureMs?: number } = {}) {
+    const clock = mock.clock(on, { now: 1000 });
+    const server = fakeServer(workspaceAnswers(view as any));
+    const redraws: number[] = [];
+    on('ui.invalidate', ($$: unknown, e: unknown, next: any) => { redraws.push(clock.now()); return next(e); });
+    on('http.fetch', async ($$: unknown, e: any) => {
+      const body = String(e.init && e.init.body);
+      if (pictureMs > 0 && (body.includes('"design.slate.image"') || body.includes('"design.slate.reference"'))) {
+        const due = clock.now() + pictureMs;
+        await new Promise<void>((resolve) => { held.push({ due, resolve }); });
+      }
+      return server.answer(e.init);
+    });
+    const held: Array<{ due: number; resolve: () => void }> = [];
+    on('ui.open', () => ({ value: { isPlaced: true } }));
+    on('ui.panes', PANE_UP);
+    on('ui.blit', () => ({ value: {} }));
+    on('ui.log', () => ({ value: undefined }));
+    on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));
+    await $.tool.call({ tool: CREATE, concept: 'A meditation app landing page' });
+    const ui = await mountPane($, surface);
+    const opened = redraws.length;
+    /** Moves the clock on by `ms` in 50 ms steps, answering each held picture once its time has come. */
+    const run = async (ms: number) => {
+      const until = clock.now() + ms;
+      while (clock.now() < until) {
+        await clock.advance(Math.min(50, until - clock.now()));
+        for (const entry of held.filter((item) => item.due <= clock.now())) {
+          held.splice(held.indexOf(entry), 1);
+          entry.resolve();
+        }
+        await clock.advance(0);
+      }
+    };
+    await clock.advance(0);
+    await clock.advance(0);
+    return { clock, server, ui, redraws, opened, run };
+  }
+
+  test('a drawn workspace of twelve is drawn once on its own in its first 10 s: the view together with its pictures (fires: was the view, then a redraw a picture)', async ($, on) => {
+    const { server, ui, redraws, opened, run } = await countedSession($, on, () => drawnView(12));
+    await run(10000);
+    expect(redraws.length - opened).toBe(1);
+    expect(server.calls.filter((call) => call.name === 'design.slate.image')).toHaveLength(12);
+    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(12);
+    await ui.unmount();
+  });
+
+  test('a first view whose pictures take 1.5 s waits for them: the pane says it is loading, then draws once with every picture (fires)', async ($, on) => {
+    const { ui, redraws, opened, run } = await countedSession($, on, () => drawnView(12), { pictureMs: 1500 });
+    await run(1400);
+    expect(redraws.length - opened).toBe(0);
+    expect(await ui.find({ type: 'Text', text: 'Loading the Design workspace.' })).toBeDefined();
+    expect(await ui.find({ key: 'tab:designs' })).toBeUndefined();
+    await run(8600);
+    expect(redraws.length - opened).toBe(1);
+    expect(redraws.at(-1)!).toBeGreaterThanOrEqual(2500);
+    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(12);
+    await ui.unmount();
+  });
+
+  test('a first view with no pictures to read is drawn at once, at the read (silent: nothing to wait for)', async ($, on) => {
+    const { ui, redraws, opened } = await countedSession($, on, () => ({ ...(viewWith({ running: false }) as any), candidates: [], versions: [] }));
+    expect(redraws.length - opened).toBe(1);
+    expect(redraws.at(-1)).toBe(1000);
+    expect(await ui.find({ type: 'Text', text: 'No inspiration yet.' })).toBeDefined();
+    await ui.unmount();
+  });
+
+  test('pictures slower than the wait do not hold the view: it draws at PICTURE_WAIT_MS with them loading, then once when they land (silent: no endless wait)', async ($, on) => {
+    const { ui, redraws, opened, run } = await countedSession($, on, () => drawnView(4), { pictureMs: 5000 });
+    await run(10000);
+    const own = redraws.slice(opened);
+    expect(own).toHaveLength(2);
+    expect(own[0]).toBe(4000);
+    expect(own[1]).toBeGreaterThanOrEqual(6000);
+    expect(own[1]).toBeLessThanOrEqual(6100);
+    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(4);
+    await ui.unmount();
+  });
+
+  test('the other tabs\' pictures are read with the view and land without a redraw (fires: read before any press, silent: no drawing)', async ($, on) => {
+    const { server, ui, redraws, opened, run } = await countedSession($, on, () => ({ ...drawnView(12), sites: [{ id: 'site-1', title: 'A site' }, { id: 'site-2', title: 'Another' }] }), { pictureMs: 800 });
+    await run(10000);
+    expect(server.calls.filter((call) => call.name === 'design.slate.reference').map((call) => call.args.referenceId)).toHaveLength(14);
+    expect(redraws.length - opened).toBe(1);
+    await ui.unmount();
+  });
+
+  test('a tab\'s first visit draws its pictures in the press\'s own drawing, and nothing after it (fires: was one or two redraws 1 to 2 s after the press)', async ($, on) => {
+    const { clock, ui, redraws, run } = await countedSession($, on, () => ({ ...drawnView(12), sites: [{ id: 'site-1', title: 'A site' }] }), { pictureMs: 800 });
+    await run(10000);
+    for (const [key, svgs] of [['tab:inspiration', 12], ['tab:references', 1]] as const) {
+      const start = redraws.length;
+      await ui.press({ key });
+      await clock.advance(0);
+      expect(redraws.length - start).toBe(1);
+      expect(await ui.findAll({ type: 'Svg' })).toHaveLength(svgs);
+      await run(5000);
+      expect(redraws.length - start).toBe(1);
+    }
+    await ui.unmount();
+  });
+
+  test('while the person presses tabs every 700 ms, the pane draws once a press and nothing of its own', async ($, on) => {
+    const { clock, server, ui, redraws } = await countedSession($, on, () => drawnView(12));
+    await clock.advance(10000);
+    const start = redraws.length;
+    const tabs = ['tab:inspiration', 'tab:references', 'tab:designs', 'tab:inspiration', 'tab:references'];
+    for (const key of tabs) {
+      await ui.press({ key });
+      await clock.advance(700);
+    }
+    expect(server.calls.filter((call) => call.name === 'design.slate.reference')).toHaveLength(12);
+    expect(redraws.length - start).toBe(tabs.length);
+    await clock.advance(5000);
+    expect(redraws.length - start).toBe(tabs.length);
+    await ui.unmount();
+  });
+
+  /** A round waiting for picks whose countdown ends at 61 s on the session clock, with `change` applied to the views status answers from `at` on. */
+  async function countingDown($: any, on: any, change: (view: any) => void = () => {}, at = Infinity) {
+    let clockNow = () => 1000;
+    const session = await countedSession($, on, () => {
+      const view: any = viewWith({ refs: ['gen-a', 'gen-b', 'gen-c'], pause: { state: 'countdown', remainingMs: 61000 - clockNow() } });
+      if (clockNow() >= at) change(view);
+      return view;
+    });
+    clockNow = () => session.clock.now();
+    return session;
+  }
+
+  test('a waiting round whose polls answer the same round redraws itself not at all while it counts down (silent: was once each 10 s step, 6 in 60 s)', async ($, on) => {
+    const { clock, redraws, opened, ui } = await countingDown($, on);
+    const before = redraws.length;
+    await clock.advance(59000);
+    expect(before - opened).toBe(1);
+    expect(redraws.length - before).toBe(0);
+    expect(await ui.find({ type: 'Text', text: '2 picked · Starts soon. Press Continue to start now.' })).toBeDefined();
+    await ui.unmount();
+  });
+
+  test('a waiting round the server holds redraws once, with its new words (fires: the words follow the round\'s state)', async ($, on) => {
+    const { clock, redraws, ui } = await countingDown($, on, (view) => { view.rounds[0].pause = { state: 'held' }; }, 5000);
+    const before = redraws.length;
+    await clock.advance(30000);
+    expect(redraws.length - before).toBe(1);
+    expect(await ui.find({ type: 'Text', text: '2 picked · Paused. Press Continue when ready.' })).toBeDefined();
+    await ui.unmount();
+  });
+
+  test('a held round, with the polls answering the same view, redraws itself not at all (silent)', async ($, on) => {
+    const { clock, redraws, ui } = await countedSession($, on, () => viewWith({ refs: ['gen-a', 'gen-b', 'gen-c'], pause: { state: 'held' } }));
+    const before = redraws.length;
+    await clock.advance(60000);
+    expect(redraws.length - before).toBe(0);
+    expect(await ui.find({ type: 'Text', text: '2 picked · Paused. Press Continue when ready.' })).toBeDefined();
+    await ui.unmount();
+  });
+
+  /**
+   * A held round whose status answers change through `next` once the session has run 5 s, the session clock times at
+   * which status answered after that, and a hold on the new reference's picture (gen-d) the test releases.
+   */
+  async function heldThenChanged($: any, on: any, next: (view: any) => void) {
+    const clock = mock.clock(on, { now: 1000 });
+    const answered: number[] = [];
+    let flipAt = Infinity;
+    const server = fakeServer(workspaceAnswers(() => {
+      if (clock.now() >= flipAt) answered.push(clock.now());
+      const view: any = viewWith({ refs: ['gen-a', 'gen-b', 'gen-c'], pause: { state: 'held' } });
+      if (clock.now() >= flipAt) next(view);
+      return view;
+    }) as any);
+    const picture = { asked: false, release: () => {} };
+    const redraws: number[] = [];
+    on('ui.invalidate', ($$: unknown, e: unknown, nextHook: any) => { redraws.push(clock.now()); return nextHook(e); });
+    on('http.fetch', async ($$: unknown, e: any) => {
+      if (String(e.init && e.init.body).includes('"gen-d"')) {
+        picture.asked = true;
+        await new Promise<void>((resolve) => { picture.release = resolve; });
+      }
+      return server.answer(e.init);
+    });
+    on('ui.open', () => ({ value: { isPlaced: true } }));
+    on('ui.panes', PANE_UP);
+    on('ui.blit', () => ({ value: {} }));
+    on('ui.log', () => ({ value: undefined }));
+    on('tool.call', { tool: CREATE }, () => ({ result: { content: [] }, text: CREATE_TEXT }));
+    await $.tool.call({ tool: CREATE, concept: 'A meditation app landing page' });
+    const ui = await mountPane($, 'desktop');
+    await clock.advance(5000);
+    flipAt = clock.now();
+    return { clock, ui, redraws, answered, picture };
+  }
+
+  /** The view change of a website landing in a waiting round: a new pick (gen-d) the inspiration page shows. */
+  const NEW_PICK = (view: any) => {
+    view.rev = 4;
+    view.stamp = '4:abc';
+    view.inspiration.searches = [{ referenceIds: ['gen-a', 'gen-b', 'gen-c', 'gen-d'] }];
+  };
+
+  test('a polled view whose new picture lands 2 s later is drawn once, with it (fires: was the view at once, then the picture a second later)', async ($, on) => {
+    const { clock, redraws, ui, answered, picture } = await heldThenChanged($, on, NEW_PICK);
+    const before = redraws.length;
+    while (!picture.asked) await clock.advance(100);
+    // The view is in and its new picture is out for 2 s, longer than the old 1 s batch waited: nothing is drawn yet.
+    await clock.advance(1900);
+    expect(redraws.length - before).toBe(0);
+    picture.release();
+    await clock.advance(100);
+    expect(redraws.length - before).toBe(1);
+    expect(redraws.at(-1)! - answered[0]!).toBeGreaterThanOrEqual(1900);
+    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(4);
+    await clock.advance(10000);
+    expect(redraws.length - before).toBe(1);
+    await ui.unmount();
+  });
+
+  test('a polled view whose new picture is slower than the wait is drawn at PICTURE_WAIT_MS, then once more when it lands (silent: no endless wait)', async ($, on) => {
+    const { clock, redraws, ui, answered, picture } = await heldThenChanged($, on, NEW_PICK);
+    const before = redraws.length;
+    while (!picture.asked) await clock.advance(100);
+    await clock.advance(3500);
+    expect(redraws.length - before).toBe(1);
+    expect(redraws.at(-1)! - answered[0]!).toBe(3000);
+    picture.release();
+    await clock.advance(1000);
+    expect(redraws.length - before).toBe(2);
+    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(4);
+    await ui.unmount();
+  });
+
+  test('a picture that lands 500 ms after a press waits for the pause after the press, then draws once (fires)', async ($, on) => {
+    const { clock, redraws, ui, picture } = await heldThenChanged($, on, NEW_PICK);
+    while (!picture.asked) await clock.advance(100);
+    const start = redraws.length;
+    const pressedAt = clock.now();
+    await ui.press({ key: 'tab:inspiration' });
+    await clock.advance(500);
+    picture.release();
+    await clock.advance(500);
+    expect(redraws.length - start).toBe(1);
+    await clock.advance(600);
+    expect(redraws.length - start).toBe(2);
+    expect(redraws.at(-1)).toBe(pressedAt + 1500);
+    expect(await ui.findAll({ type: 'Svg' })).toHaveLength(4);
+    await ui.unmount();
+  });
+
+  test('the same picture with no press before it draws as it lands (silent: no wait without presses)', async ($, on) => {
+    const { clock, redraws, ui, picture } = await heldThenChanged($, on, NEW_PICK);
+    while (!picture.asked) await clock.advance(100);
+    const start = redraws.length;
+    await clock.advance(500);
+    const releasedAt = clock.now();
+    picture.release();
+    await clock.advance(50);
+    expect(redraws.length - start).toBe(1);
+    expect(redraws.at(-1)).toBe(releasedAt);
+    await ui.unmount();
+  });
+
+  test('a polled view that brings no picture is drawn at once, at the poll (silent)', async ($, on) => {
+    const { clock, redraws, ui, answered } = await heldThenChanged($, on, (view) => {
+      view.rev = 4;
+      view.stamp = '4:abc';
+      view.rounds[0].referenceIds = ['gen-a'];
+    });
+    const before = redraws.length;
+    await clock.advance(15000);
+    expect(redraws.length - before).toBe(1);
+    expect(redraws.at(-1)).toBe(answered[0]);
+    expect(await ui.find({ type: 'Text', text: '1 picked · Paused. Press Continue when ready.' })).toBeDefined();
+    await ui.unmount();
+  });
+
+  // ---- the tab a workspace opens on, and Select (gallery.mjs openingTab, pane.mjs galleryTile) ----
+  test('a workspace whose round waits for picks opens on Inspiration with Select on every tile (fires)', async ($, on) => {
+    const { ui } = await countedSession($, on, () => viewWith({ refs: ['gen-a', 'gen-b', 'gen-c'], pause: { state: 'countdown', remainingMs: 42000 } }));
+    expect(await ui.find({ key: 'per:12' })).toBeUndefined();
+    expect((await ui.findAll({ type: 'Button' })).filter((node: any) => String(node.props.key).startsWith('pick:'))).toHaveLength(3);
+    await ui.unmount();
+  });
+
+  test('a drawn workspace opens on Designs, and its Inspiration offers no Select with no round waiting (silent)', async ($, on) => {
+    const { clock, ui } = await countedSession($, on, () => drawnView(4));
+    expect(await ui.find({ key: 'per:12' })).toBeDefined();
+    await ui.press({ key: 'tab:inspiration' });
+    await clock.advance(1000);
+    expect((await ui.findAll({ type: 'Svg' })).length).toBe(12);
+    expect((await ui.findAll({ type: 'Button' })).filter((node: any) => String(node.props.key).startsWith('pick:'))).toHaveLength(0);
+    expect(await ui.find({ type: 'Text', text: /Picks feed a round/ })).toBeUndefined();
     await ui.unmount();
   });
 });

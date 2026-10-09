@@ -16,16 +16,17 @@
 
 import { continueArgs, convertHandoffArgs, holdArgs, inspireArgs, isActionError, pickArgs, runBranchArgs, runEditArgs, runNewArgs } from './workspace/actions.mjs';
 import { uuidV4 } from './workspace/bytes.mjs';
-import { LOADING, NO_ROUND_WAITING, NO_WORKSPACE, PANE_ID, PANE_TITLE, READY_TOAST, RECORDED_RUNNER, SENT } from './workspace/copy.mjs';
-import { PER_ROUND, SEARCH_COUNT, inspirationIds, perRoundOf, pickLimit, picksOf, referenceSize, sameList, siteItems, togglePick, twelveDraws, waitingRound } from './workspace/gallery.mjs';
+import { LOADING, NO_WORKSPACE, PANE_ID, PANE_TITLE, READY_TOAST, RECORDED_RUNNER, SENT } from './workspace/copy.mjs';
+import { PER_ROUND, SEARCH_COUNT, inspirationIds, openingTab, perRoundOf, pickLimit, picksOf, referenceSize, sameList, siteItems, tabThumbs, togglePick, twelveDraws, viewThumbs, waitingRound } from './workspace/gallery.mjs';
 import { handleFromCall } from './workspace/handles.mjs';
 import { afterRun, buildMessage, judgeRunner, runMessage } from './workspace/messages.mjs';
 import { bandTree, paneTree } from './workspace/pane.mjs';
 import { pictureMaxRows, tileGrid } from './workspace/layout.mjs';
-import { blitSaysAlt, decodeThumb, desktopPictureSize, imageSource, pictureKind, rasterCells, svgPicture, tileBox, useCellsFor } from './workspace/picture.mjs';
+import { blitSaysAlt, decodeThumb, desktopPictureSize, imageSource, imageTreeBudget, pictureKind, rasterCells, svgPicture, tileBox, useCellsFor } from './workspace/picture.mjs';
 import { nextStep, pollDelay, retriesFirstRead, wantsPolling } from './workspace/poll.mjs';
+import { drawnSignature, pictureRedrawDelay, pressQuietDelay } from './workspace/redraw.mjs';
 import { TOOLS, errorLine, imageBlock, isWorkspaceError, mendsOnRetry, readRpc, rpcBody, workspaceError } from './workspace/transport.mjs';
-import { briefLine, countdownLine, countdownOf, findOp, hasRunning, isView, labelOfVersion, opWaitsOnPerson, shownVersionIds, tilesOf } from './workspace/view.mjs';
+import { briefLine, countdownLine, countdownOf, findOp, hasRunning, isView, labelOfVersion, opWaitsOnPerson, tilesOf } from './workspace/view.mjs';
 
 // ---- the session's state: module memory, as the hosted screen keeps it (a reload starts over) ----
 let current = null;
@@ -38,11 +39,15 @@ const thumbs = new Map();
 const drafts = new Map();
 const inFlight = new Set();
 const runnerWatch = new Map();
-// What the person is doing in the pane: the tab, the prompt line, the waiting round's picks, the large view.
-const ui = { tab: 'inspiration', autoTab: false, prompt: '', promptEdited: false, chosen: null, chosenOp: null, heldOp: null, pauseOp: null, lv: null, perRound: null, nowMs: 0 };
+// What the person is doing in the pane: the tab (`openedFor`: the workspace whose opening tab was chosen), the prompt
+// line, the waiting round's picks, the large view.
+const ui = { tab: 'inspiration', autoTab: false, openedFor: null, prompt: '', promptEdited: false, chosen: null, chosenOp: null, heldOp: null, pauseOp: null, lv: null, perRound: null };
 const poll = { timer: null, step: 0, busy: false, isOpen: false, failedRetryably: false };
 const blit = { altDrawn: false, toggled: null, probed: false, lastAnswer: null };
-let ticker = null;
+// The pane's own redraws (redraw.mjs): what the last drawing showed (`shows`: the workspace whose view it drew) and for
+// which surface and props, when the pane last asked for one on its own, the batch of pictures waiting to be drawn
+// together (when it began, its timer), the person's last press and the redraw waiting for the pause after it.
+const redraw = { drawn: null, shows: null, surface: null, props: null, lastSelfAtMs: null, batchStartAtMs: null, timer: null, lastPressAtMs: null, quietTimer: null };
 let pollError = '';
 let actionError = '';
 let noticeText = '';
@@ -76,26 +81,58 @@ function draftId(slot) {
 // ---- the view, the pictures and the polling ----
 async function applyView($, runDir, view) {
   views.set(runDir, { view, receivedAtMs: await $.clock.now() });
-  syncTicker($);
-  if (runDir === current) followPause(view, views.get(runDir).receivedAtMs);
-  for (const versionId of shownVersionIds(view)) {
-    const slot = workspaceSlot(runDir, versionId);
-    if (!thumbs.has(slot)) void fetchThumb($, slot, TOOLS.image, { runDir, versionId, size: 'thumb' });
+  if (runDir !== current) return;
+  followPause(runDir, view, views.get(runDir).receivedAtMs);
+  fetchThumbs($, runDir);
+  // A view whose shown tab still waits on pictures (ones it brings, or ones already being read) is drawn once, together
+  // with them: it joins their batch (redraw.mjs PICTURE_WAIT_MS at most) instead of drawing its tiles loading and then
+  // again with their pictures. That holds for the first view too: until it draws, the pane says it is loading and has
+  // no tabs to press. A view with every picture in is drawn at once.
+  if (thumbsOut() > 0) await joinPictureBatch($);
+  else await redrawIfChanged($);
+}
+
+/** Reads every thumbnail of the view the pane does not hold yet, the shown tab's first (gallery.mjs `viewThumbs`). */
+function fetchThumbs($, runDir) {
+  const view = viewOf(runDir);
+  if (!view || runDir !== current) return;
+  for (const want of viewThumbs(view, ui.tab)) {
+    const slot = workspaceSlot(runDir, want.slot);
+    if (thumbs.has(slot)) continue;
+    void fetchThumb($, slot, want.kind === 'version' ? TOOLS.image : TOOLS.reference, { runDir, ...want.args, size: 'thumb' });
   }
-  for (const id of [...inspirationIds(view), ...siteItems(view).map((site) => site.id)]) {
-    const slot = workspaceSlot(runDir, `ref:${id}`);
-    if (!thumbs.has(slot)) void fetchThumb($, slot, TOOLS.reference, { runDir, referenceId: id, size: 'thumb' });
-  }
-  $.ui.invalidate('ui.render');
+}
+
+/** Whether the shown tab of the shown workspace draws the thumbnail kept under `slot`. */
+function isShown(slot) {
+  const view = viewOf(current);
+  return Boolean(view) && tabThumbs(view, ui.tab).some((want) => workspaceSlot(current, want.slot) === slot);
+}
+
+/** How many of the shown tab's thumbnails are still being read. */
+function thumbsOut() {
+  const view = viewOf(current);
+  if (!view) return 0;
+  return tabThumbs(view, ui.tab).filter((want) => {
+    const thumb = thumbs.get(workspaceSlot(current, want.slot));
+    return thumb && thumb.state === 'loading';
+  }).length;
 }
 
 /**
- * A round that starts waiting on the person opens the pane on Inspiration with its picks preselected; when the wait
- * ends (Continue, or the countdown ran out) a pane the round put on Inspiration moves to Designs, as the screen does.
+ * The tab a workspace opens on (gallery.mjs `openingTab`): Inspiration with its picks preselected while a round waits on
+ * the person, else Designs once it has options. A round that starts waiting later moves the pane to Inspiration; when
+ * the wait ends (Continue, or the countdown ran out) a pane the round put on Inspiration moves to Designs, as the screen
+ * does.
  */
-function followPause(view, receivedAtMs) {
+function followPause(runDir, view, receivedAtMs) {
   const countdown = countdownOf(view, receivedAtMs);
-  if (countdown && ui.pauseOp !== countdown.opId) {
+  const opening = ui.openedFor !== runDir;
+  ui.openedFor = runDir;
+  if (opening && !countdown) {
+    ui.tab = openingTab(view, false);
+    ui.autoTab = false;
+  } else if (countdown && ui.pauseOp !== countdown.opId) {
     ui.pauseOp = countdown.opId;
     ui.chosen = null;
     ui.chosenOp = null;
@@ -118,6 +155,61 @@ async function fetchThumb($, slot, tool, args) {
   } catch (error) {
     thumbs.set(slot, { state: 'failed', reason: errorLine(error) });
   }
+  // Another tab's picture, or another workspace's, changes nothing drawn: it waits in `thumbs` for that tab's drawing.
+  if (isShown(slot)) await joinPictureBatch($);
+}
+
+/**
+ * A shown picture landed, or a view that waits on some: drawn with the others of the shown tab, in one redraw once the
+ * last is in, or when the batch has waited PICTURE_WAIT_MS (redraw.mjs `pictureRedrawDelay`).
+ */
+async function joinPictureBatch($) {
+  const now = await $.clock.now();
+  if (redraw.batchStartAtMs === null) redraw.batchStartAtMs = now;
+  // The once-a-second pace is between drawings of one workspace's view: a workspace's first view (the pane says it is
+  // loading) draws as soon as its pictures are in.
+  const paced = redraw.lastSelfAtMs !== null && redraw.shows === current;
+  const delay = pictureRedrawDelay({
+    sinceLastSelfMs: paced ? now - redraw.lastSelfAtMs : null,
+    sinceBatchStartMs: now - redraw.batchStartAtMs,
+    outstanding: thumbsOut(),
+  });
+  if (redraw.timer) redraw.timer.cancel();
+  redraw.timer = $.clock.after(delay, () => {
+    redraw.timer = null;
+    redraw.batchStartAtMs = null;
+    void redrawIfChanged($);
+  });
+}
+
+/** What `thumbs` holds for a slot, as a drawing would show it, without decoding or encoding a picture. */
+function thumbFact(thumbSlot) {
+  const thumb = thumbs.get(thumbSlot);
+  if (!thumb) return null;
+  if (thumb.state === 'loading') return { kind: 'loading' };
+  if (thumb.state === 'failed') return { kind: 'failed', reason: thumb.reason };
+  return { kind: 'ready' };
+}
+
+/**
+ * A redraw the pane asks for on its own (a view, pictures, a poll's error): only when what it would draw differs from
+ * what is drawn (redraw.mjs `drawnSignature`), and only once the person has paused pressing (`pressQuietDelay`).
+ * Presses redraw directly.
+ */
+async function redrawIfChanged($) {
+  const now = await $.clock.now();
+  const quiet = pressQuietDelay(redraw.lastPressAtMs === null ? null : now - redraw.lastPressAtMs);
+  if (quiet > 0) {
+    if (!redraw.quietTimer) redraw.quietTimer = $.clock.after(quiet, () => { redraw.quietTimer = null; void redrawIfChanged($); });
+    return;
+  }
+  if (redraw.drawn !== null) {
+    const { model } = paneModel(redraw.surface, redraw.props, thumbFact);
+    const signature = drawnSignature(model);
+    if (signature === redraw.drawn) return;
+    redraw.drawn = signature;
+  }
+  redraw.lastSelfAtMs = now;
   $.ui.invalidate('ui.render');
 }
 
@@ -126,39 +218,16 @@ function stopPolling() {
   poll.timer = null;
 }
 
-function stopTicker() {
-  if (ticker) ticker.cancel();
-  ticker = null;
-}
-
 /** Whether the Design workspace pane is still on screen: the person closing it raises nothing a hook sees, so this asks. */
 async function paneIsUp($) {
   return (await $.ui.panes()).some((pane) => pane.id === PANE_ID);
 }
 
-/** The pane is gone: nothing polls, ticks or waits for it any more. */
+/** The pane is gone: nothing polls or waits for it any more. */
 function paneGone() {
   poll.isOpen = false;
   paneWaits = false;
   stopPolling();
-  stopTicker();
-}
-
-/** One tick of the start countdown: a redraw while the pane is up, and the end of the clocks once it is gone. */
-async function tickWhileUp($) {
-  if (!(await paneIsUp($))) {
-    paneGone();
-    return;
-  }
-  $.ui.invalidate('ui.render');
-}
-
-function syncTicker($) {
-  const entry = views.get(current);
-  const countdown = entry ? countdownOf(entry.view, entry.receivedAtMs) : null;
-  if (poll.isOpen && countdown && countdown.state === 'countdown') {
-    if (!ticker) ticker = $.clock.every(1000, () => { void tickWhileUp($); });
-  } else stopTicker();
 }
 
 async function schedulePoll($) {
@@ -204,7 +273,7 @@ async function refresh($) {
     if (runDir === current) {
       pollError = errorLine(error);
       poll.failedRetryably = mendsOnRetry(error);
-      $.ui.invalidate('ui.render');
+      await redrawIfChanged($);
     }
   } finally {
     poll.busy = false;
@@ -229,7 +298,6 @@ function showWorkspace($, runDir) {
   }
   current = runDir;
   stopPolling();
-  stopTicker();
   poll.step = 0;
   poll.failedRetryably = false;
   pollError = '';
@@ -238,7 +306,9 @@ function showWorkspace($, runDir) {
   ui.lv = null;
   ui.pauseOp = null;
   ui.promptEdited = false;
-  $.ui.invalidate('ui.render');
+  // Presses on the last workspace's drawing hold back no redraw of this one: what they pressed on is gone.
+  redraw.lastPressAtMs = null;
+  // No redraw here: its one caller opens the pane next, and that open redraws it.
   readSoon($);
 }
 
@@ -353,13 +423,10 @@ function holdOnce($) {
   }, (error) => { actionError = errorLine(error); $.ui.invalidate('ui.render'); });
 }
 
+/** A pick: offered only while a round waits (pane.mjs); a press on a drawing from before the wait ended does nothing. */
 function togglePickOf($, id) {
   const pause = pauseNow();
-  if (!pause) {
-    noticeText = NO_ROUND_WAITING;
-    $.ui.invalidate('ui.render');
-    return;
-  }
+  if (!pause) return;
   const next = togglePick(pause.picks, id, pickLimit(pause.view));
   if (next.refused) noticeText = `At most ${pickLimit(pause.view)} picks.`;
   else noticeText = '';
@@ -392,9 +459,9 @@ function searchPrompt($, words) {
   holdOnce($);
   return record($, workspaceSlot(runDir, 'inspire', ui.prompt), async () => {
     const { structured } = await rpc($, TOOLS.inspire, inspireArgs(runDir, ui.prompt, SEARCH_COUNT));
+    ui.tab = 'inspiration';
     if (structured && isView(structured.view)) await applyView($, runDir, structured.view);
     else await refresh($);
-    ui.tab = 'inspiration';
   });
 }
 
@@ -472,8 +539,6 @@ async function probeBlit($, slot, source) {
  * page of references wedged the worker and the pane vanished). The rest show as loading and the next render takes them.
  */
 const DECODES_PER_RENDER = 2;
-/** Image source one pane tree may carry: under the engine's 2 MiB cap on a tree's Image sources. */
-const IMAGE_TREE_BYTES = 1_800_000;
 const decodes = { left: DECODES_PER_RENDER, deferred: false };
 
 /** The picture of one thumbnail (a design version or a reference) for a box `tileColumns` wide. */
@@ -524,27 +589,35 @@ function refSize(view, id) {
   return referenceSize(view, id);
 }
 
-function paneModel($, e, els) {
-  const surface = e.surface;
-  const bodyColumns = e.props && typeof e.props.bodyColumns === 'number' ? e.props.bodyColumns : 80;
-  const maxRows = pictureMaxRows(e.props && e.props.scroll ? e.props.scroll.bodyRows : undefined);
+/** The pane's handlers, each noting the press first, so the pane's own redraws wait for the pause after it (redraw.mjs). */
+function pressHandlers($, handlers) {
+  const noted = {};
+  for (const [name, handler] of Object.entries(handlers)) {
+    noted[name] = (...args) => {
+      void $.clock.now().then((now) => { redraw.lastPressAtMs = now; });
+      return handler(...args);
+    };
+  }
+  return noted;
+}
+
+/**
+ * What the pane draws for `surface` and its `props`, as a plain model (pane.mjs draws it). `pictureOf(thumbSlot, size,
+ * tileColumns, maxRows)` gives each picture: the render's real ones, or redrawIfChanged's facts without pixels.
+ */
+function paneModel(surface, props, pictureOf) {
+  const bodyColumns = props && typeof props.bodyColumns === 'number' ? props.bodyColumns : 80;
+  const maxRows = pictureMaxRows(props && props.scroll ? props.scroll.bodyRows : undefined);
   const grid = tileGrid(bodyColumns);
   const tileColumns = Math.max(8, grid.columns - 2);
   const entry = current ? views.get(current) : null;
   const view = entry ? entry.view : null;
-  const useCells = useCellsFor({ toggled: blit.toggled, altDrawn: blit.altDrawn });
-  decodes.left = DECODES_PER_RENDER;
-  decodes.deferred = false;
   let probe = null;
-  let imageBytes = 0;
+  const budget = imageTreeBudget();
   const remember = (slot, picture) => {
-    if (!picture || picture.kind !== 'image') return picture;
-    // The engine refuses a whole tree past IMAGE_TREE_BYTES of Image source and draws an empty pane (seen live
-    // 2026-10-02 on a page of tall references before the blit probe answered): a picture past the budget waits.
-    imageBytes += picture.source.length;
-    if (imageBytes > IMAGE_TREE_BYTES) return { kind: 'loading' };
-    if (!probe) probe = { slot: 'picture:' + slot, source: picture.source };
-    return picture;
+    const admitted = budget.admit(picture);
+    if (admitted && admitted.kind === 'image' && !probe) probe = { slot: 'picture:' + slot, source: admitted.source };
+    return admitted;
   };
   const model = {
     surface,
@@ -571,8 +644,7 @@ function paneModel($, e, els) {
   const picks = pause ? pause.picks : [];
   model.selectedCount = pause ? picks.length : (view.pick ? 1 : 0);
   if (pause) {
-    const nowWords = countdownLine(pause.countdown, ui.nowMs);
-    model.tray = { words: `${picks.length} picked · ${nowWords}`, canContinue: picks.length > 0 };
+    model.tray = { words: `${picks.length} picked · ${countdownLine(pause.countdown)}`, canContinue: picks.length > 0 };
   }
   if (ui.tab === 'designs') {
     model.perRound = perRoundOf(view, ui.perRound);
@@ -580,13 +652,13 @@ function paneModel($, e, els) {
       const tile = largeTile();
       if (tile) {
         const lvColumns = Math.max(16, bodyColumns - 4);
-        const picture = tile.versionId ? pictureFor(surface, workspaceSlot(current, tile.versionId), { width: tile.width, height: tile.height }, useCells, lvColumns, Math.max(maxRows, 30)) : null;
+        const picture = tile.versionId ? pictureOf(workspaceSlot(current, tile.versionId), { width: tile.width, height: tile.height }, lvColumns, Math.max(maxRows, 30)) : null;
         model.lv = { tile, picture: remember(`lv:${tile.candidateId}`, picture), mode: ui.lv.mode, scope: ui.lv.scope, pages: ui.lv.pages };
       } else ui.lv = null;
     }
     model.tiles = tilesOf(view).map((tile) => ({
       ...tile,
-      picture: tile.versionId ? remember(tile.candidateId, pictureFor(surface, workspaceSlot(current, tile.versionId), { width: tile.width, height: tile.height }, useCells, tileColumns, maxRows)) : null,
+      picture: tile.versionId ? remember(tile.candidateId, pictureOf(workspaceSlot(current, tile.versionId), { width: tile.width, height: tile.height }, tileColumns, maxRows)) : null,
     }));
   } else {
     const ids = ui.tab === 'references' ? siteItems(view) : inspirationIds(view).map((id) => ({ id, title: '' }));
@@ -594,7 +666,7 @@ function paneModel($, e, els) {
     model.items = ids.map((item) => ({
       ...item,
       selected: picks.includes(item.id),
-      picture: remember(item.id, pictureFor(surface, workspaceSlot(current, `ref:${item.id}`), refSize(view, item.id), useCells, tileColumns, maxRows)),
+      picture: remember(item.id, pictureOf(workspaceSlot(current, `ref:${item.id}`), refSize(view, item.id), tileColumns, maxRows)),
     }));
   }
   return { model, probe };
@@ -630,14 +702,20 @@ export function register(on) {
       poll.isOpen = true;
       readSoon($);
     }
-    ui.nowMs = await $.clock.now();
-    const { model, probe } = paneModel($, e, els);
+    const useCells = useCellsFor({ toggled: blit.toggled, altDrawn: blit.altDrawn });
+    decodes.left = DECODES_PER_RENDER;
+    decodes.deferred = false;
+    const { model, probe } = paneModel(e.surface, e.props, (thumbSlot, size, tileColumns, maxRows) => pictureFor(e.surface, thumbSlot, size, useCells, tileColumns, maxRows));
+    redraw.drawn = drawnSignature(model);
+    redraw.shows = current && views.has(current) ? current : null;
+    redraw.surface = e.surface;
+    redraw.props = e.props;
     if (decodes.deferred) $.clock.after(50, () => { $.ui.invalidate('ui.render'); });
     if (probe && !blit.probed) $.clock.after(250, () => { void probeBlit($, probe.slot, probe.source); });
-    model.handlers = {
+    model.handlers = pressHandlers($, {
       promptInput: (value) => { ui.prompt = String(value ?? ''); ui.promptEdited = true; },
       promptSubmit: (value) => { void searchPrompt($, value); },
-      tab: (name) => { ui.tab = name; ui.autoTab = false; ui.lv = null; $.ui.invalidate('ui.render'); },
+      tab: (name) => { ui.tab = name; ui.autoTab = false; ui.lv = null; fetchThumbs($, current); $.ui.invalidate('ui.render'); },
       toggle: (id) => { togglePickOf($, id); },
       continueRound: () => { void continueRound($); },
       perRound: (n) => { void setPerRound($, n); },
@@ -653,7 +731,7 @@ export function register(on) {
       branchPagesInput: (value) => { if (ui.lv) ui.lv.pages = String(value ?? ''); },
       branchSubmit: (value) => { void branchDesign($, 'site', value ?? (ui.lv ? ui.lv.pages : '')); },
       buildThis: () => { void buildThis($); },
-    };
+    });
     return paneTree(els, model);
   });
 
