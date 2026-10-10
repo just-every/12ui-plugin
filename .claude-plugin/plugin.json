@@ -1,7 +1,7 @@
 {
   "name": "12ui-design",
   "displayName": "12ui Design",
-  "version": "0.2.123",
+  "version": "0.2.124",
   "description": "A Design workspace in Claude Code: see design options for a UI as images, select one, ask for more, ask for a change with a note and hand an option off to be built. Your agent runs the 12ui command line once per request, which draws every option at once with your own Codex sign-in.",
   "author": {
     "name": "12ui",
