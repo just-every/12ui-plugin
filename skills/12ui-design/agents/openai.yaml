@@ -1,6 +1,6 @@
 interface:
   display_name: "12ui Design"
-  short_description: "Draft, branch, and convert polished interfaces"
+  short_description: "Design in a workspace, then branch, convert and improve"
   default_prompt: "Use $12ui-design to create a new homepage for this project."
 policy:
   products:
