@@ -33,3 +33,4 @@ Real geometry and light, the page as real HTML over it, 2-3 clicks and drag orbi
 **5. Check.** Run `12ui scene capture http://127.0.0.1:<port>/index.html --out-dir shots/i01 --orbit=-15,15` (a new `shots/iNN` each time) and look at `landing`, `az-15` and `az+15`. Fix the biggest mismatch first (placement, silhouettes, light, colour) and capture again. Stop when landing reads as the source and +-15 holds.
 
 **6. Report** in two lines: the URL and what you built (objects, interactions); the landing capture path and what still differs.
+

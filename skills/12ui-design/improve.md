@@ -11,3 +11,4 @@ Site scope is always a kit that carries an accepted root design across the site'
     12ui improve <url> --scope site --direction "<specific visual direction>" --out-dir <kit>
 
 Apply the kit's `site-plan/APPLY.md` and run the recheck it ends with; inspect every target and any page whose mapping is blocked.
+

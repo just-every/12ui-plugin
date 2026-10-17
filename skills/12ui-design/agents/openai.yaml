@@ -6,3 +6,4 @@ policy:
   products:
     - CODEX
   allow_implicit_invocation: true
+

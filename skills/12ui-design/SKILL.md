@@ -100,3 +100,4 @@ A screen where the user picks inspiration and chooses a design. Its first round 
       12ui workspace open --concept "<brief>" --wait
 
   `--concept @brief.txt` reads a long brief from a file. Add `--reference <image>` with `--retain` only for what the person asked to keep of it, and `--aspect portrait` for mobile. Run it in the background, tell the user in one line to choose in the page it prints, read its output until the JSON decision line arrives (ending your turn ends the wait), then do what its `text` says.
+

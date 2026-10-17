@@ -9,3 +9,4 @@ Derive more formats from that conversion's ID without converting again:
     12ui convert <conversion-id> --output html_fixed,svg,pdf --out-dir <dir>
 
 Local runs use native images through the person's Codex sign-in by default; external images run only with `--image-backend external`, which uses the person's own `OPENAI_API_KEY`; pass it only when they ask.
+
