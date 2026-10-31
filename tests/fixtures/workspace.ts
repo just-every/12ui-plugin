@@ -37,7 +37,7 @@ export type Answers = Record<string, (args: Json) => Reply>;
 function version(id: string, candidateId: string, label: string): Json {
   return {
     versionId: id, candidateId, label, n: 1, kind: 'generation', parentVersionId: null, prompt: null, marks: null,
-    width: THUMB_WIDTH, height: THUMB_HEIGHT, sha256: 'a'.repeat(64), path: '', createdAt: '', fileState: 'ok',
+    width: THUMB_WIDTH, height: THUMB_HEIGHT, fileState: 'ok',
     editable: true, editBlockedReason: null,
   };
 }
@@ -46,7 +46,7 @@ function candidate(id: string, label: string, state: string, extra: Json = {}): 
   const versionIds = state === 'ready' ? [`v_${label.toLowerCase()}`] : [];
   return {
     candidateId: id, label, roundId: 'r_1', state, error: null, versionIds,
-    latestVersionId: versionIds[0] ?? null, busy: false, busyOpId: null, latestOpId: null, referenceId: null, ...extra,
+    latestVersionId: versionIds[0] ?? null, busy: false, busyOpId: null, referenceId: null, ...extra,
   };
 }
 
@@ -63,7 +63,6 @@ export function viewWith(options: ViewOptions = {}): Json {
     schema: '12ui.slate.view/3',
     rev,
     stamp: `${rev}:abc`,
-    workspaceId: 'wk_public',
     runDir: RUN_DIR,
     brief: { concept: 'A meditation app landing page', aspect: 'landscape' },
     local: { image: { ready: true, reason: null } },
@@ -79,12 +78,11 @@ export function viewWith(options: ViewOptions = {}): Json {
     versions: [version('v_a', 'c_a', 'A')],
     ops: [{
       opId: ROUND_OP, kind: 'round', state: running ? 'running' : 'succeeded', phase: running ? options.phase ?? 'agent' : 'done',
-      attempt: 1, target: 'Round 1', roundId: 'r_1', startedAt: '', finishedAt: null, error: null, edit: null,
-      resultVersionIds: [], runner: { alive: running, pid: null, heartbeatAgeMs: null }, resumable: false,
+      attempt: 1, target: 'Round 1', roundId: 'r_1', error: null, edit: null,
+      resultVersionIds: [], runner: { alive: running },
     }],
     pick: options.pickA ? {
-      versionId: 'v_a', label: 'A', reason: null, pickedAt: '', imagePath: null, fileState: 'ok', intact: true,
-      sourcePath: '', sha256: 'a'.repeat(64),
+      versionId: 'v_a', label: 'A', reason: null,
     } : null,
     inspiration: { selected: [], searches: refs.length > 0 ? [{ referenceIds: refs }] : [] },
     references: {},
@@ -139,7 +137,7 @@ export function fakeServer(answers: Answers) {
 export function workspaceAnswers(view: () => Json, extra: Answers = {}): Answers {
   return {
     'design.slate.status': () => ({ structured: view() }),
-    'design.slate.show': () => ({ structured: view(), content: [{ type: 'text', text: 'Design workspace wk_public: 3 options.' }] }),
+    'design.slate.show': () => ({ structured: view(), content: [{ type: 'text', text: 'Design workspace: 3 options.' }] }),
     'design.slate.reference': (args: Json) => ({
       content: [{ type: 'image', data: THUMB_JPEG, mimeType: 'image/jpeg' }],
       structured: { referenceId: args.referenceId, size: 'thumb', width: THUMB_WIDTH, height: THUMB_HEIGHT, mimeType: 'image/jpeg' },

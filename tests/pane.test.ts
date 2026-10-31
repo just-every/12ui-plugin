@@ -41,7 +41,7 @@ describe('pane.test.ts', () => {
   });
 
   const SUMMARY_TEXT = JSON.stringify({
-    schema: '12ui.slate.summary/1', runDir: RUN_DIR, rev: 1, stamp: '1', options: 6, ready: 0,
+    runDir: RUN_DIR, options: 6, ready: 0,
     requestId: '0d6c8a52-1f3e-4b7a-9c2d-3e4f5a6b7c8d', pushToken: `wp_${'a'.repeat(22)}`,
   });
 
