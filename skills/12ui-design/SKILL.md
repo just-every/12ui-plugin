@@ -41,6 +41,8 @@ For a single approved image, convert directly rather than branching.
 
 When Codex is ready on this machine, the conversion runs in this process on the person's own Codex sign-in, with no 12ui account; otherwise on the 12ui service. Run it in the foreground until it exits and the saved run reports a terminal result (ending the session earlier can interrupt a paid call). If it stops, `12ui next <run-dir>` names the recovery; never start a fresh conversion or add `--engine api` in its place.
 
+Local Codex prepares its runtime on first use (an npm install, so it needs network access) in the first writable of `TWELVE_UI_CODEX_RUNTIME_CACHE`, `XDG_CACHE_HOME`, `~/.cache/12ui` and a per-user temp folder. In a Codex workspace-write sandbox that stops with `EPERM` or `EACCES` naming the cache directory: set `TWELVE_UI_CODEX_RUNTIME_CACHE` to a writable directory and run the same command again (an explicit value is never skipped), or re-run with escalated permissions.
+
 Use the returned editable HTML/CSS and assets as the implementation baseline; rebuilding from scratch loses pixel precision. Derive another supported output from the saved run or its output directory (React is whole-page JSX, CSS, and assets, not a behavior-complete application):
 
     12ui export <run-dir-or-output-dir> --output assets|png|jpg|webp|pdf|react --out-dir <dir>
