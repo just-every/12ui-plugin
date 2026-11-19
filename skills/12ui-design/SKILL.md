@@ -49,7 +49,7 @@ Use the returned editable HTML/CSS and assets as the implementation baseline; re
 
 ## 4. Integrate and close
 
-Integrate the converted code and real assets into the owning project. Preserve its framework, routes, data, controls, and tests. For multi-screen HTML, use the generated prototype as the routing and interaction baseline before wiring application behavior.
+Integrate the converted code and real assets into the owning project. Preserve its framework, routes, data, controls, and tests. For multi-screen HTML, use the generated prototype as the routing and interaction baseline before wiring application behavior. An `animation` asset (a layer animated through an edit) arrives as a looping animated WebP inside a `<picture>` whose reduced-motion source is the layer's still: keep both files and that markup, never re-encode or flatten the animation (its GIF master is the `layer-animation-master` artifact), and check the motion and the reduced-motion still in a real browser.
 
 After functionality and content are in place, inspect the real browser against each page or state's original approved image. That image remains the visual authority; a derived document or top-viewport screenshot does not prove alignment for lower regions or other states. A continuous Branch page keeps ordered viewport PNGs rather than one full-page image: check each rendered region against its own. Check relevant widths and transitions.
 
